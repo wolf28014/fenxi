@@ -1,0 +1,81 @@
+name: Build Android APK
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-34 build-tools;34.0.0'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Web
+        run: npm run build
+
+      - name: Install Capacitor
+        run: npm install -g @capacitor/cli
+
+      - name: Add Android Platform
+        run: |
+          if [ ! -d "android" ]; then
+            npx cap add android
+          fi
+          npx cap sync android
+
+      - name: Build APK
+        working-directory: android
+        run: ./gradlew assembleRelease
+
+      - name: Sign APK
+        if: env.SIGNING_KEY != ''
+        env:
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          ALIAS: ${{ secrets.ALIAS }}
+          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          echo "$SIGNING_KEY" | base64 -d > app/release.keystore
+          cp android/app/build/outputs/apk/release/app-release-unsigned.apk app-release-signed.apk
+          jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 -keystore app/release.keystore -storepass "$KEY_STORE_PASSWORD" -keypass "$KEY_PASSWORD" app-release-signed.apk "$ALIAS"
+          ${ANDROID_HOME}/build-tools/34.0.0/zipalign -v 4 app-release-signed.apk app-release-final.apk
+
+      - name: Upload APK to Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            app-release-final.apk
+            android/app/build/outputs/apk/release/app-release-unsigned.apk
+          generate_release_notes: true
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-apk
+          path: |
+            app-release-final.apk
+            android/app/build/outputs/apk/release/app-release-unsigned.apk

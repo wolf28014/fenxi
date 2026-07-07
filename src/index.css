@@ -1,0 +1,217 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  /* 主题变量（会被 JS 动态覆盖） */
+  --theme-bg: #fafbfc;
+  --theme-bg-image: #fafbfc;
+  --theme-card-bg: #ffffff;
+  --theme-text: #1e293b;
+  --theme-text-muted: #64748b;
+  --theme-border: #e2e8f0;
+  --theme-primary: #3b82f6;
+  --theme-primary-hover: #2563eb;
+  --theme-accent: #0ea5e9;
+  --theme-card-radius: 12px;
+  --theme-card-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  --theme-header-bg: #ffffff;
+  --theme-sidebar-bg: #f8fafc;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Inter', 'Noto Sans SC', system-ui, -apple-system, sans-serif;
+  background-color: #f8fafc;
+  color: #0f172a;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.dark html, .dark body {
+  background-color: #0f172a;
+  color: #f1f5f9;
+}
+
+#root {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* 自定义滚动条 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: #475569;
+}
+
+/* 工具类 */
+@layer components {
+  .card {
+    background: var(--theme-card-bg);
+    border-radius: var(--theme-card-radius);
+    border: 1px solid var(--theme-border);
+    box-shadow: var(--theme-card-shadow);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    transition: all 0.3s ease;
+  }
+  .card:hover {
+    border-color: var(--theme-primary);
+    box-shadow: 0 8px 32px rgba(59, 130, 246, 0.12), var(--theme-card-shadow);
+  }
+  .input {
+    @apply w-full px-3 py-2 text-sm focus:outline-none focus:ring-2 transition;
+    border-radius: 8px;
+    border: 1px solid var(--theme-border);
+    background: var(--theme-card-bg);
+    color: var(--theme-text);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+  .input:focus {
+    border-color: var(--theme-primary);
+    --tw-ring-color: var(--theme-primary);
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium transition disabled:opacity-50 disabled:cursor-not-allowed;
+    border-radius: 8px;
+  }
+  .btn-primary {
+    @apply btn text-white;
+    background: var(--theme-primary);
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.25);
+  }
+  .btn-primary:hover {
+    background: var(--theme-primary-hover);
+    box-shadow: 0 4px 16px rgba(59, 130, 246, 0.4);
+  }
+  .btn-secondary {
+    @apply btn;
+    background: var(--theme-border);
+    color: var(--theme-text);
+  }
+  .btn-secondary:hover {
+    opacity: 0.85;
+  }
+  .btn-danger {
+    @apply btn bg-red-500 hover:bg-red-600 text-white;
+    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.25);
+  }
+  .btn-ghost {
+    @apply btn;
+    color: var(--theme-text-muted);
+  }
+  .btn-ghost:hover {
+    background: var(--theme-border);
+  }
+  .label {
+    @apply text-sm font-medium mb-1 block;
+    color: var(--theme-text-muted);
+  }
+  .chip {
+    @apply inline-flex items-center px-2 py-0.5 rounded text-xs font-medium;
+  }
+  .safe-top { padding-top: var(--safe-area-top); }
+  .safe-bottom { padding-bottom: var(--safe-area-bottom); }
+
+  /* KPI 卡片发光呼吸效果 */
+  .kpi-card {
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s ease;
+  }
+  .kpi-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+    transition: left 0.6s ease;
+  }
+  .kpi-card:hover::before {
+    left: 100%;
+  }
+  .kpi-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 24px rgba(0,0,0,0.08);
+  }
+
+  /* 异常值脉冲动画 */
+  @keyframes pulse-red {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+  }
+  .pulse-red {
+    animation: pulse-red 2s ease-in-out infinite;
+  }
+
+  /* 玻璃拟态深度 */
+  .glass-panel {
+    background: rgba(255, 255, 255, 0.65);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+  }
+  .dark .glass-panel {
+    background: rgba(30, 41, 59, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  /* 表头冻结 - 滚动时表头固定 */
+  .freeze-header thead th {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: #1d4ed8;
+  }
+  .freeze-header thead {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+}
+
+/* 动画 */
+.fade-in {
+  animation: fadeIn 0.2s ease-out;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.slide-up {
+  animation: slideUp 0.25s ease-out;
+}
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+/* ECharts 容器 */
+.echarts-container {
+  width: 100%;
+  height: 100%;
+}

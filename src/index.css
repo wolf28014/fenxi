@@ -184,12 +184,16 @@ html, body {
     position: sticky;
     top: 0;
     z-index: 10;
-    background: #1d4ed8;
   }
   .freeze-header thead {
-    position: sticky;
+    position: sticky !important;
     top: 0;
     z-index: 10;
+    background: #1d4ed8 !important;
+  }
+  /* sticky 的 thead 内 th 也需要背景色 */
+  .freeze-header thead tr {
+    background: #1d4ed8 !important;
   }
 }
 

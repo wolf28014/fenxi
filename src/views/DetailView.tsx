@@ -513,7 +513,7 @@ function DailySalesTable({ rows, shopNameMap, showShop, onEdit, onDelete, onBatc
       </div>
 
       <div className="card">
-        <div className="overflow-x-auto">
+        <div className="overflow-auto max-h-[70vh]">
           <table className="w-full text-sm freeze-header">
             <thead className="bg-primary-700 text-white">
               <tr>
@@ -625,8 +625,8 @@ function MonthlySalesTable({ rows, onEdit, onDelete }: { rows: any[]; onEdit: (i
   const summaryNetROI = last.cumPromoCost > 0 ? last.cumNetSales / last.cumPromoCost : 0;
 
   return (
-    <div className="card overflow-hidden">
-      <div className="overflow-x-auto">
+    <div className="card">
+      <div className="overflow-auto max-h-[70vh]">
         <table className="w-full text-sm freeze-header">
           <thead className="bg-primary-700 text-white">
             <tr>
@@ -778,7 +778,7 @@ function CostTable({ costs, shopNameMap, showShop, onEdit, onDelete, onBatchDele
       </div>
 
       <div className="card">
-        <div className="overflow-x-auto">
+        <div className="overflow-auto max-h-[70vh]">
           <table className="w-full text-sm freeze-header">
             <thead className="bg-primary-700 text-white">
               <tr>

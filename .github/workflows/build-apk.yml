@@ -57,7 +57,7 @@ jobs:
         run: ./gradlew assembleRelease
 
       - name: Sign APK
-        if: ${{ secrets.SIGNING_KEY != '' }}
+        if: env.SIGNING_KEY != ''
         env:
           SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
           ALIAS: ${{ secrets.ALIAS }}

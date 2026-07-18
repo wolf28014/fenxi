@@ -5,10 +5,15 @@
 
 ```bash
 supabase functions deploy ai-proxy
-supabase secrets set SUPABASE_SERVICE_ROLE_KEY="<service-role-key>"
 ```
 
-`SUPABASE_URL`, `SUPABASE_ANON_KEY`, and the service role key are provided by the Supabase runtime. Never put the service role key or `ai_api_key` in the frontend build.
+Supabase hosted Edge Functions provide `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and the legacy `SUPABASE_SERVICE_ROLE_KEY` automatically. You normally do not need to create these in the Dashboard. Never put the service role key or `ai_api_key` in the frontend build.
+
+For a custom secret, use the CLI:
+
+```bash
+supabase secrets set MY_SECRET="value"
+```
 
 3. Set the `app_config.ai_api_key` value only through the Supabase dashboard or a service-role migration. The browser must only call `ai-proxy`.
 4. Configure GitHub Actions secrets `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` before enabling Pages or APK builds.

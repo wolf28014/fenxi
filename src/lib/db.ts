@@ -86,6 +86,11 @@ export async function createProduct(input: Omit<Product, 'id' | 'userId' | 'crea
     sku: input.sku || null,
     category: input.category || null,
     image_url: input.imageUrl || null,
+    sale_price: input.salePrice ?? null,
+    unit_cost: input.unitCost ?? null,
+    target_margin: input.targetMargin ?? null,
+    launch_date: input.launchDate || null,
+    tags: input.tags || [],
     status: input.status || 'active',
     sort_order: input.sortOrder ?? 0,
   };
@@ -105,6 +110,11 @@ export async function updateProduct(id: string, updates: Partial<Product>): Prom
   if (updates.sku != null) payload.sku = updates.sku;
   if (updates.category != null) payload.category = updates.category;
   if (updates.imageUrl != null) payload.image_url = updates.imageUrl;
+  if (updates.salePrice !== undefined) payload.sale_price = updates.salePrice ?? null;
+  if (updates.unitCost !== undefined) payload.unit_cost = updates.unitCost ?? null;
+  if (updates.targetMargin !== undefined) payload.target_margin = updates.targetMargin ?? null;
+  if (updates.launchDate !== undefined) payload.launch_date = updates.launchDate || null;
+  if (updates.tags !== undefined) payload.tags = updates.tags || [];
   if (updates.status != null) payload.status = updates.status;
   if (updates.sortOrder != null) payload.sort_order = updates.sortOrder;
 
@@ -653,6 +663,11 @@ function mapProduct(d: any): Product {
     sku: d.sku,
     category: d.category,
     imageUrl: d.image_url,
+    salePrice: d.sale_price == null ? undefined : Number(d.sale_price),
+    unitCost: d.unit_cost == null ? undefined : Number(d.unit_cost),
+    targetMargin: d.target_margin == null ? undefined : Number(d.target_margin),
+    launchDate: d.launch_date || undefined,
+    tags: Array.isArray(d.tags) ? d.tags : [],
     status: d.status,
     sortOrder: d.sort_order,
     createdAt: d.created_at,

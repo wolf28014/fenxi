@@ -45,6 +45,11 @@ export interface Product {
   sku?: string;
   category?: string;
   imageUrl?: string;
+  salePrice?: number;
+  unitCost?: number;
+  targetMargin?: number;
+  launchDate?: string;
+  tags?: string[];
   status: 'active' | 'inactive' | 'discontinued';
   sortOrder: number;
   createdAt: string;

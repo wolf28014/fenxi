@@ -1,345 +1,100 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Shop, Product, DailyMetric, MonthlyCost, DailyPromotion } from '@/types';
 import { COST_FIELDS } from '@/types';
 import { fetchProducts, createProduct, updateProduct, deleteProduct, fetchDailyMetrics, fetchDailyPromotions, fetchMonthlyCosts } from '@/lib/db';
 import { showToast } from '@/components/Toast';
 import Modal from '@/components/Modal';
-import { formatCurrency, formatPercent, getLastYearSameRange, getQuickRange } from '@/lib/calc';
+import { formatCurrency, formatPercent, getQuickRange } from '@/lib/calc';
 
-interface Props {
-  currentShop: Shop | null;
-  shops: Shop[];
-  setShops: (shops: Shop[]) => void;
-}
-
+interface Props { currentShop: Shop | null; shops: Shop[]; setShops: (shops: Shop[]) => void; }
 interface ProductStats {
-  totalSales: number;
-  totalRefund: number;
-  netSales: number;
-  refundRate: number;
-  totalCost: number;
-  totalPromo: number;
-  profit: number;
-  profitRate: number;
-  orderCount: number;
-  visitorCount: number;
+  totalSales: number; totalRefund: number; netSales: number; refundRate: number;
+  totalCost: number; totalPromo: number; profit: number; profitRate: number; orderCount: number;
+  visitorCount: number; conversionRate: number; averageOrderValue: number; roas: number; incomplete: boolean;
+}
+type RangeKey = 'last30Days' | 'thisMonth' | 'lastMonth' | 'thisNaturalYear';
+
+const rangeOptions: { key: RangeKey; label: string }[] = [
+  { key: 'last30Days', label: '近30天' }, { key: 'thisMonth', label: '本月' },
+  { key: 'lastMonth', label: '上月' }, { key: 'thisNaturalYear', label: '本年' },
+];
+
+function tagFor(p: Product, s: ProductStats): string[] {
+  const tags = [...(p.tags || [])];
+  if (s.profit < 0 && !tags.includes('亏损')) tags.push('亏损');
+  if (s.refundRate >= 12 && !tags.includes('高退款')) tags.push('高退款');
+  if (s.totalPromo > 0 && s.roas > 0 && s.roas < 2 && !tags.includes('投放低效')) tags.push('投放低效');
+  if (s.profitRate >= (p.targetMargin ?? 20) && s.netSales > 0 && !tags.includes('高利润')) tags.push('高利润');
+  return tags;
 }
 
 export default function ProductView({ currentShop, shops }: Props) {
   const [products, setProducts] = useState<Product[]>([]);
+  const [stats, setStats] = useState<Record<string, ProductStats>>({});
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Product | null>(null);
   const [creating, setCreating] = useState(false);
-  const [stats, setStats] = useState<Record<string, ProductStats>>({});
-  const [rankType, setRankType] = useState<'sales' | 'refund' | 'profit' | 'loss'>('sales');
+  const [rangeKey, setRangeKey] = useState<RangeKey>('thisMonth');
+  const [status, setStatus] = useState('all');
+  const [category, setCategory] = useState('all');
+  const [tag, setTag] = useState('all');
+  const [query, setQuery] = useState('');
+  const [sort, setSort] = useState<'sales' | 'profit' | 'refund' | 'roas'>('sales');
 
-  const range = useMemo(() => getQuickRange('thisNaturalYear'), []);
-
+  const range = useMemo(() => getQuickRange(rangeKey), [rangeKey]);
   const load = async () => {
-    // 决定加载哪些店铺的产品
     const targetShops = currentShop ? [currentShop] : shops;
-    if (targetShops.length === 0) {
-      setProducts([]);
-      setLoading(false);
-      return;
-    }
+    if (!targetShops.length) { setProducts([]); setLoading(false); return; }
     setLoading(true);
     try {
       const allProducts = (await Promise.all(targetShops.map((s) => fetchProducts(s.id)))).flat();
-      setProducts(allProducts);
-
-      // 计算每个产品的统计
-      const newStats: Record<string, ProductStats> = {};
-      await Promise.all(
-        allProducts.map(async (p) => {
-          const shopId = p.shopId;
-          const [metrics, promotions, costs] = await Promise.all([
-            fetchDailyMetrics(shopId, p.id, range.start, range.end),
-            fetchDailyPromotions(shopId, p.id, range.start, range.end),
-            fetchMonthlyCosts(shopId, p.id, new Date(range.start).getFullYear(), 1, new Date(range.end).getFullYear(), 12),
-          ]);
-          const totalSales = metrics.reduce((s, m) => s + m.salesAmount, 0);
-          const totalRefund = metrics.reduce((s, m) => s + m.refundAmount, 0);
-          const netSales = totalSales - totalRefund;
-          const totalPromo = metrics.reduce((s, m) => s + m.promotionCost, 0) || promotions.reduce((s, p) => s + p.total, 0);
-          // 货品成本 = 净销售额 × 店铺默认成本率
-          const shop = shops.find(s => s.id === shopId);
-          const costRate = shop?.defaultCostRate || 0;
-          const autoProductCost = costRate > 0 ? netSales * (costRate / 100) : 0;
-          const otherCosts = costs.reduce((s, c) => {
-            return s + COST_FIELDS.filter(f => f.key !== 'productCost').reduce((cs, f) => cs + (Number(c[f.key as keyof typeof c]) || 0), 0);
-          }, 0);
-          const totalCost = autoProductCost + otherCosts;
-          const profit = netSales - totalCost - totalPromo;
-          newStats[p.id] = {
-            totalSales,
-            totalRefund,
-            netSales,
-            refundRate: totalSales > 0 ? (totalRefund / totalSales) * 100 : 0,
-            totalCost,
-            totalPromo,
-            profit,
-            profitRate: netSales > 0 ? (profit / netSales) * 100 : 0,
-            orderCount: metrics.reduce((s, m) => s + m.orderCount, 0),
-            visitorCount: metrics.reduce((s, m) => s + m.visitorCount, 0),
-          };
-        }),
-      );
-      setStats(newStats);
-    } catch (e: any) {
-      showToast(e.message || '加载失败', 'error');
-    } finally {
-      setLoading(false);
-    }
+      const result: Record<string, ProductStats> = {};
+      await Promise.all(allProducts.map(async (p) => {
+        const [metrics, promotions, costs] = await Promise.all([
+          fetchDailyMetrics(p.shopId, p.id, range.start, range.end),
+          fetchDailyPromotions(p.shopId, p.id, range.start, range.end),
+          fetchMonthlyCosts(p.shopId, p.id, Number(range.start.slice(0, 4)), 1, Number(range.end.slice(0, 4)), 12),
+        ]);
+        const totalSales = metrics.reduce((v, m) => v + Number(m.salesAmount || 0), 0);
+        const totalRefund = metrics.reduce((v, m) => v + Number(m.refundAmount || 0), 0);
+        const netSales = totalSales - totalRefund;
+        const totalPromo = metrics.length ? metrics.reduce((v, m) => v + Number(m.promotionCost || 0), 0) : promotions.reduce((v, m) => v + Number(m.total || 0), 0);
+        const shop = shops.find((s) => s.id === p.shopId);
+        const productCost = p.unitCost != null ? metrics.reduce((v, m) => v + Number(m.orderCount || 0), 0) * p.unitCost : netSales * ((shop?.defaultCostRate || 0) / 100);
+        const otherCosts = costs.reduce((v, c) => v + COST_FIELDS.filter((f) => f.key !== 'productCost').reduce((x, f) => x + Number(c[f.key as keyof MonthlyCost] || 0), 0), 0);
+        const totalCost = productCost + otherCosts;
+        const orderCount = metrics.reduce((v, m) => v + Number(m.orderCount || 0), 0);
+        const visitorCount = metrics.reduce((v, m) => v + Number(m.visitorCount || 0), 0);
+        const profit = netSales - totalCost - totalPromo;
+        result[p.id] = { totalSales, totalRefund, netSales, refundRate: totalSales ? totalRefund / totalSales * 100 : 0, totalCost, totalPromo, profit, profitRate: netSales ? profit / netSales * 100 : 0, orderCount, visitorCount, conversionRate: visitorCount ? orderCount / visitorCount * 100 : 0, averageOrderValue: orderCount ? netSales / orderCount : 0, roas: totalPromo ? netSales / totalPromo : 0, incomplete: p.unitCost == null && !(shop?.defaultCostRate), };
+      }));
+      setProducts(allProducts); setStats(result);
+    } catch (e: any) { showToast(e.message || '加载产品数据失败', 'error'); }
+    finally { setLoading(false); }
   };
+  useEffect(() => { load(); }, [currentShop, shops, range.start, range.end]);
 
-  useEffect(() => {
-    load();
-    const handler = () => load();
-    window.addEventListener('realtime:products', handler);
-    window.addEventListener('realtime:metrics', handler);
-    window.addEventListener('realtime:costs', handler);
-    return () => {
-      window.removeEventListener('realtime:products', handler);
-      window.removeEventListener('realtime:metrics', handler);
-      window.removeEventListener('realtime:costs', handler);
-    };
-  }, [currentShop, range.start, range.end]);
+  const categories = useMemo(() => Array.from(new Set(products.map((p) => p.category).filter(Boolean))) as string[], [products]);
+  const allTags = useMemo(() => Array.from(new Set(products.flatMap((p) => tagFor(p, stats[p.id]).filter(Boolean)))), [products, stats]);
+  const visibleProducts = useMemo(() => products.filter((p) => {
+    const s = stats[p.id]; if (!s) return false;
+    return (status === 'all' || p.status === status) && (category === 'all' || p.category === category) && (tag === 'all' || tagFor(p, s).includes(tag)) && (!query || `${p.name} ${p.sku || ''}`.toLowerCase().includes(query.toLowerCase()));
+  }).sort((a, b) => { const x = stats[a.id]; const y = stats[b.id]; if (sort === 'profit') return y.profit - x.profit; if (sort === 'refund') return y.refundRate - x.refundRate; if (sort === 'roas') return y.roas - x.roas; return y.totalSales - x.totalSales; }), [products, stats, status, category, tag, query, sort]);
+  const summary = useMemo(() => visibleProducts.reduce((a, p) => { const s = stats[p.id]; a.sales += s.totalSales; a.net += s.netSales; a.profit += s.profit; a.refund += s.totalRefund; a.promo += s.totalPromo; a.orders += s.orderCount; return a; }, { sales: 0, net: 0, profit: 0, refund: 0, promo: 0, orders: 0 }), [visibleProducts, stats]);
+  const exportRows = () => { const header = '商品,SKU,销售额,净销售额,订单,退款率,推广花费,ROAS,利润,利润率\n'; const body = visibleProducts.map((p) => { const s = stats[p.id]; return [p.name, p.sku || '', s.totalSales.toFixed(2), s.netSales.toFixed(2), s.orderCount, s.refundRate.toFixed(2), s.totalPromo.toFixed(2), s.roas.toFixed(2), s.profit.toFixed(2), s.profitRate.toFixed(2)].join(','); }).join('\n'); const blob = new Blob([header + body], { type: 'text/csv;charset=utf-8' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `products-${range.start}-${range.end}.csv`; a.click(); URL.revokeObjectURL(a.href); };
 
-  const handleDelete = async (p: Product) => {
-    if (!confirm(`确定删除产品"${p.name}"吗？`)) return;
-    try {
-      await deleteProduct(p.id);
-      showToast('已删除', 'success');
-      load();
-    } catch (e: any) {
-      showToast(e.message || '删除失败', 'error');
-    }
-  };
-
-  const ranked = useMemo(() => {
-    const arr = products.filter((p) => stats[p.id]);
-    if (rankType === 'sales') return arr.sort((a, b) => stats[b.id].totalSales - stats[a.id].totalSales);
-    if (rankType === 'refund') return arr.sort((a, b) => stats[b.id].refundRate - stats[a.id].refundRate);
-    if (rankType === 'profit') return arr.sort((a, b) => stats[b.id].profitRate - stats[a.id].profitRate);
-    if (rankType === 'loss') return arr.sort((a, b) => stats[a.id].profit - stats[b.id].profit);
-    return arr;
-  }, [products, stats, rankType]);
-
-  if (shops.length === 0) {
-    return (
-      <div className="card p-12 text-center">
-        <div className="text-5xl mb-4">🏪</div>
-        <p className="text-slate-500">请先在「店铺管理」中添加店铺</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-semibold text-slate-900 dark:text-white">产品中心</h2>
-          <p className="text-sm text-slate-500 mt-1">
-            {currentShop?.name || '所有店铺'} · 共 {products.length} 个产品
-          </p>
-        </div>
-        <button onClick={() => setCreating(true)} className="btn-primary">+ 添加产品</button>
-      </div>
-
-      {/* 排行榜 */}
-      {ranked.length > 0 && (
-        <div className="card p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-medium text-slate-900 dark:text-white">📊 产品排行（本自然年）</h3>
-            <div className="flex gap-1 p-1 bg-slate-100 dark:bg-slate-700 rounded-lg text-xs">
-              <button
-                onClick={() => setRankType('sales')}
-                className={`px-2 py-1 rounded ${rankType === 'sales' ? 'bg-white shadow text-primary-600' : 'text-slate-500'}`}
-              >🔥 热销</button>
-              <button
-                onClick={() => setRankType('refund')}
-                className={`px-2 py-1 rounded ${rankType === 'refund' ? 'bg-white shadow text-primary-600' : 'text-slate-500'}`}
-              >⚠️ 高退款</button>
-              <button
-                onClick={() => setRankType('profit')}
-                className={`px-2 py-1 rounded ${rankType === 'profit' ? 'bg-white shadow text-primary-600' : 'text-slate-500'}`}
-              >💎 高利润</button>
-              <button
-                onClick={() => setRankType('loss')}
-                className={`px-2 py-1 rounded ${rankType === 'loss' ? 'bg-white shadow text-primary-600' : 'text-slate-500'}`}
-              >📉 亏损</button>
-            </div>
-          </div>
-          <div className="space-y-2 max-h-64 overflow-y-auto">
-            {ranked.slice(0, 10).map((p, i) => {
-              const s = stats[p.id];
-              return (
-                <div key={p.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700/50">
-                  <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
-                    i === 0 ? 'bg-amber-100 text-amber-700' : i === 1 ? 'bg-slate-200 text-slate-700' : i === 2 ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-500'
-                  }`}>{i + 1}</span>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium truncate">{p.name}</div>
-                    {p.sku && <div className="text-xs text-slate-400">SKU: {p.sku}</div>}
-                  </div>
-                  <div className="text-right text-xs">
-                    {rankType === 'sales' && <div className="font-medium text-emerald-600">{formatCurrency(s.totalSales)}</div>}
-                    {rankType === 'refund' && <div className="font-medium text-red-500">{formatPercent(s.refundRate)}</div>}
-                    {rankType === 'profit' && <div className="font-medium text-emerald-600">{formatPercent(s.profitRate)}</div>}
-                    {rankType === 'loss' && <div className={`font-medium ${s.profit >= 0 ? 'text-slate-500' : 'text-red-500'}`}>{formatCurrency(s.profit)}</div>}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* 产品列表 */}
-      {loading ? (
-        <div className="text-center py-12 text-slate-400">加载中...</div>
-      ) : products.length === 0 ? (
-        <div className="card p-12 text-center">
-          <div className="text-5xl mb-4">📦</div>
-          <h3 className="text-lg font-medium text-slate-700 dark:text-slate-200 mb-2">还没有产品</h3>
-          <p className="text-sm text-slate-500 mb-4">添加你的第一个产品开始追踪数据</p>
-          <button onClick={() => setCreating(true)} className="btn-primary">+ 立即添加</button>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {products.map((p) => {
-            const s = stats[p.id];
-            return (
-              <div key={p.id} className="card p-4">
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium text-slate-900 dark:text-white truncate">{p.name}</div>
-                    <div className="text-xs text-slate-400 mt-0.5">
-                      {p.sku && <span>SKU: {p.sku}</span>}
-                      {p.category && <span> · {p.category}</span>}
-                    </div>
-                  </div>
-                  <span className={`chip ${p.status === 'active' ? 'bg-emerald-100 text-emerald-700' : p.status === 'discontinued' ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-500'}`}>
-                    {p.status === 'active' ? '在售' : p.status === 'discontinued' ? '停售' : '下架'}
-                  </span>
-                </div>
-
-                {s ? (
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div className="p-2 bg-slate-50 dark:bg-slate-700/50 rounded">
-                      <div className="text-slate-400">销售额</div>
-                      <div className="font-medium text-slate-700 dark:text-slate-200">{formatCurrency(s.totalSales)}</div>
-                    </div>
-                    <div className="p-2 bg-slate-50 dark:bg-slate-700/50 rounded">
-                      <div className="text-slate-400">退款率</div>
-                      <div className={`font-medium ${s.refundRate > 5 ? 'text-red-500' : 'text-slate-700 dark:text-slate-200'}`}>{formatPercent(s.refundRate)}</div>
-                    </div>
-                    <div className="p-2 bg-slate-50 dark:bg-slate-700/50 rounded">
-                      <div className="text-slate-400">利润</div>
-                      <div className={`font-medium ${s.profit >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{formatCurrency(s.profit)}</div>
-                    </div>
-                    <div className="p-2 bg-slate-50 dark:bg-slate-700/50 rounded">
-                      <div className="text-slate-400">利润率</div>
-                      <div className={`font-medium ${s.profitRate >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{formatPercent(s.profitRate)}</div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-xs text-slate-400 text-center py-3">暂无数据</div>
-                )}
-
-                <div className="flex gap-2 mt-3">
-                  <button onClick={() => setEditing(p)} className="btn-secondary flex-1 text-xs">编辑</button>
-                  <button onClick={() => handleDelete(p)} className="btn-danger text-xs">删除</button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {(creating || editing) && currentShop && (
-        <ProductEditor
-          product={editing}
-          shopId={currentShop.id}
-          onClose={() => {
-            setCreating(false);
-            setEditing(null);
-          }}
-          onSaved={() => {
-            setCreating(false);
-            setEditing(null);
-            load();
-          }}
-        />
-      )}
-    </div>
-  );
+  if (!shops.length) return <div className="card p-12 text-center text-slate-500">请先添加店铺，再管理商品。</div>;
+  return <div className="space-y-4">
+    <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-semibold text-slate-900 dark:text-white">产品中心</h2><p className="text-sm text-slate-500 mt-1">经营分析与投放决策</p></div><button onClick={() => setCreating(true)} className="btn-primary">+ 添加商品</button></div>
+    <div className="card p-3 flex flex-wrap gap-2 items-center"><div className="flex gap-1">{rangeOptions.map((o) => <button key={o.key} onClick={() => setRangeKey(o.key)} className={`px-3 py-1.5 text-sm rounded ${rangeKey === o.key ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-600'}`}>{o.label}</button>)}</div><input className="input max-w-xs" placeholder="搜索商品或 SKU" value={query} onChange={(e) => setQuery(e.target.value)} /><select className="input w-auto" value={status} onChange={(e) => setStatus(e.target.value)}><option value="all">全部状态</option><option value="active">在售</option><option value="inactive">下架</option><option value="discontinued">停售</option></select><select className="input w-auto" value={category} onChange={(e) => setCategory(e.target.value)}><option value="all">全部分类</option>{categories.map((c) => <option key={c} value={c}>{c}</option>)}</select><select className="input w-auto" value={tag} onChange={(e) => setTag(e.target.value)}><option value="all">全部标签</option>{allTags.map((t) => <option key={t} value={t}>{t}</option>)}</select><select className="input w-auto" value={sort} onChange={(e) => setSort(e.target.value as typeof sort)}><option value="sales">按销售额</option><option value="profit">按利润</option><option value="refund">按退款率</option><option value="roas">按 ROAS</option></select><button onClick={exportRows} className="btn-secondary">导出</button></div>
+    <div className="grid grid-cols-2 md:grid-cols-6 gap-3">{[['商品数', visibleProducts.length, ''], ['净销售额', formatCurrency(summary.net), ''], ['利润', formatCurrency(summary.profit), summary.profit >= 0 ? 'text-emerald-600' : 'text-red-500'], ['利润率', formatPercent(summary.net ? summary.profit / summary.net * 100 : 0), ''], ['退款金额', formatCurrency(summary.refund), ''], ['ROAS', summary.promo ? (summary.net / summary.promo).toFixed(2) : '—', '']].map(([label, value, color]) => <div key={String(label)} className="card p-3"><div className="text-xs text-slate-500">{label}</div><div className={`text-lg font-semibold mt-1 ${color}`}>{value}</div></div>)}</div>
+    {loading ? <div className="text-center py-12 text-slate-400">加载中...</div> : <div className="card overflow-x-auto"><table className="w-full text-sm"><thead><tr className="text-left text-xs text-slate-500 border-b"><th className="p-3">商品</th><th className="p-3">销售额</th><th className="p-3">订单/转化</th><th className="p-3">退款率</th><th className="p-3">推广/ROAS</th><th className="p-3">利润/利润率</th><th className="p-3">标签</th><th className="p-3">操作</th></tr></thead><tbody>{visibleProducts.map((p) => { const s = stats[p.id]; const tags = tagFor(p, s); return <tr key={p.id} className="border-b last:border-0 hover:bg-slate-50 dark:hover:bg-slate-800"><td className="p-3"><div className="font-medium">{p.name}</div><div className="text-xs text-slate-400">{p.sku || '无 SKU'} · {p.category || '未分类'}</div></td><td className="p-3">{formatCurrency(s.totalSales)}<div className="text-xs text-slate-400">净 {formatCurrency(s.netSales)}</div></td><td className="p-3">{s.orderCount}<div className="text-xs text-slate-400">{formatPercent(s.conversionRate)}</div></td><td className={`p-3 ${s.refundRate >= 12 ? 'text-red-500' : ''}`}>{formatPercent(s.refundRate)}</td><td className="p-3">{formatCurrency(s.totalPromo)}<div className="text-xs text-slate-400">{s.roas ? s.roas.toFixed(2) : '—'}</div></td><td className={`p-3 ${s.profit < 0 ? 'text-red-500' : 'text-emerald-600'}`}>{formatCurrency(s.profit)}<div className="text-xs">{formatPercent(s.profitRate)}</div></td><td className="p-3"><div className="flex flex-wrap gap-1">{s.incomplete && <span className="chip bg-amber-100 text-amber-700">成本缺失</span>}{tags.map((t) => <span key={t} className={`chip ${t === '亏损' || t === '高退款' ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-600'}`}>{t}</span>)}</div></td><td className="p-3 whitespace-nowrap"><button onClick={() => setEditing(p)} className="btn-secondary text-xs mr-1">编辑</button><button onClick={async () => { if (!confirm(`确定删除商品“${p.name}”吗？`)) return; try { await deleteProduct(p.id); showToast('已删除', 'success'); load(); } catch (e: any) { showToast(e.message || '删除失败', 'error'); } }} className="btn-danger text-xs">删除</button></td></tr>; })}</tbody></table>{!visibleProducts.length && <div className="p-10 text-center text-slate-400">没有符合条件的商品</div>}</div>}
+    {(creating || editing) && currentShop && <ProductEditor product={editing} shopId={currentShop.id} onClose={() => { setCreating(false); setEditing(null); }} onSaved={() => { setCreating(false); setEditing(null); load(); }} />}
+  </div>;
 }
 
 function ProductEditor({ product, shopId, onClose, onSaved }: { product: Product | null; shopId: string; onClose: () => void; onSaved: () => void }) {
-  const [name, setName] = useState(product?.name || '');
-  const [sku, setSku] = useState(product?.sku || '');
-  const [category, setCategory] = useState(product?.category || '');
-  const [status, setStatus] = useState<'active' | 'inactive' | 'discontinued'>(product?.status || 'active');
-  const [saving, setSaving] = useState(false);
-
-  const handleSave = async () => {
-    if (!name) {
-      showToast('请输入产品名称', 'warning');
-      return;
-    }
-    setSaving(true);
-    try {
-      if (product) {
-        await updateProduct(product.id, { name, sku, category, status });
-        showToast('已更新', 'success');
-      } else {
-        await createProduct({ name, sku, category, status, sortOrder: 0, shopId });
-        showToast('已添加', 'success');
-      }
-      onSaved();
-    } catch (e: any) {
-      showToast(e.message || '保存失败', 'error');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <Modal
-      open={true}
-      onClose={onClose}
-      title={product ? '编辑产品' : '添加产品'}
-      footer={
-        <>
-          <button onClick={onClose} className="btn-secondary">取消</button>
-          <button onClick={handleSave} disabled={saving} className="btn-primary">{saving ? '保存中...' : '保存'}</button>
-        </>
-      }
-    >
-      <div className="space-y-4">
-        <div>
-          <label className="label">产品名称 *</label>
-          <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="如：商品A" />
-        </div>
-        <div>
-          <label className="label">SKU</label>
-          <input className="input" value={sku} onChange={(e) => setSku(e.target.value)} placeholder="可选" />
-        </div>
-        <div>
-          <label className="label">分类</label>
-          <input className="input" value={category} onChange={(e) => setCategory(e.target.value)} placeholder="可选" />
-        </div>
-        <div>
-          <label className="label">状态</label>
-          <div className="grid grid-cols-3 gap-2">
-            <button onClick={() => setStatus('active')} className={`p-2 rounded-lg border text-sm ${status === 'active' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-200'}`}>在售</button>
-            <button onClick={() => setStatus('inactive')} className={`p-2 rounded-lg border text-sm ${status === 'inactive' ? 'border-amber-500 bg-amber-50 text-amber-700' : 'border-slate-200'}`}>下架</button>
-            <button onClick={() => setStatus('discontinued')} className={`p-2 rounded-lg border text-sm ${status === 'discontinued' ? 'border-red-500 bg-red-50 text-red-700' : 'border-slate-200'}`}>停售</button>
-          </div>
-        </div>
-      </div>
-    </Modal>
-  );
+  const [name, setName] = useState(product?.name || ''); const [sku, setSku] = useState(product?.sku || ''); const [category, setCategory] = useState(product?.category || ''); const [status, setStatus] = useState<Product['status']>(product?.status || 'active'); const [salePrice, setSalePrice] = useState(product?.salePrice?.toString() || ''); const [unitCost, setUnitCost] = useState(product?.unitCost?.toString() || ''); const [targetMargin, setTargetMargin] = useState(product?.targetMargin?.toString() || ''); const [tags, setTags] = useState((product?.tags || []).join(', ')); const [saving, setSaving] = useState(false);
+  const save = async () => { if (!name.trim()) { showToast('请输入商品名称', 'warning'); return; } setSaving(true); try { const input = { name: name.trim(), sku: sku.trim(), category: category.trim(), status, salePrice: salePrice === '' ? undefined : Number(salePrice), unitCost: unitCost === '' ? undefined : Number(unitCost), targetMargin: targetMargin === '' ? undefined : Number(targetMargin), tags: tags.split(',').map((v) => v.trim()).filter(Boolean) }; if (product) await updateProduct(product.id, input); else await createProduct({ ...input, sortOrder: 0, shopId }); showToast(product ? '已更新' : '已添加', 'success'); onSaved(); } catch (e: any) { showToast(e.message || '保存失败', 'error'); } finally { setSaving(false); } };
+  return <Modal open onClose={onClose} title={product ? '编辑商品' : '添加商品'} footer={<><button onClick={onClose} className="btn-secondary">取消</button><button onClick={save} disabled={saving} className="btn-primary">{saving ? '保存中...' : '保存'}</button></>}><div className="space-y-3"><div><label className="label">商品名称 *</label><input className="input" value={name} onChange={(e) => setName(e.target.value)} /></div><div className="grid grid-cols-2 gap-3"><div><label className="label">SKU</label><input className="input" value={sku} onChange={(e) => setSku(e.target.value)} /></div><div><label className="label">分类</label><input className="input" value={category} onChange={(e) => setCategory(e.target.value)} /></div><div><label className="label">售价</label><input type="number" min="0" className="input" value={salePrice} onChange={(e) => setSalePrice(e.target.value)} /></div><div><label className="label">单位成本</label><input type="number" min="0" className="input" value={unitCost} onChange={(e) => setUnitCost(e.target.value)} /></div><div><label className="label">目标毛利率 (%)</label><input type="number" min="0" max="100" className="input" value={targetMargin} onChange={(e) => setTargetMargin(e.target.value)} /></div><div><label className="label">标签</label><input className="input" placeholder="爆款, 夏季" value={tags} onChange={(e) => setTags(e.target.value)} /></div></div><div><label className="label">状态</label><select className="input" value={status} onChange={(e) => setStatus(e.target.value as Product['status'])}><option value="active">在售</option><option value="inactive">下架</option><option value="discontinued">停售</option></select></div></div></Modal>;
 }

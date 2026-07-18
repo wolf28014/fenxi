@@ -89,6 +89,8 @@ export async function createProduct(input: Omit<Product, 'id' | 'userId' | 'crea
     image_url: input.imageUrl || null,
     sale_price: input.salePrice ?? null,
     unit_cost: input.unitCost ?? null,
+    cost_mode: input.costMode || 'fixed',
+    cost_rate: input.costRate ?? null,
     target_margin: input.targetMargin ?? null,
     launch_date: input.launchDate || null,
     tags: input.tags || [],
@@ -113,6 +115,8 @@ export async function updateProduct(id: string, updates: Partial<Product>): Prom
   if (updates.imageUrl != null) payload.image_url = updates.imageUrl;
   if (updates.salePrice !== undefined) payload.sale_price = updates.salePrice ?? null;
   if (updates.unitCost !== undefined) payload.unit_cost = updates.unitCost ?? null;
+  if (updates.costMode !== undefined) payload.cost_mode = updates.costMode || 'fixed';
+  if (updates.costRate !== undefined) payload.cost_rate = updates.costRate ?? null;
   if (updates.targetMargin !== undefined) payload.target_margin = updates.targetMargin ?? null;
   if (updates.launchDate !== undefined) payload.launch_date = updates.launchDate || null;
   if (updates.tags !== undefined) payload.tags = updates.tags || [];
@@ -199,6 +203,8 @@ export async function upsertDailyMetric(input: Partial<DailyMetric> & { shopId: 
     date: input.date,
     sales_amount: Number(input.salesAmount) || 0,
     order_count: Number(input.orderCount) || 0,
+    sold_quantity: Number(input.soldQuantity ?? input.orderCount) || 0,
+    refund_quantity: Number(input.refundQuantity) || 0,
     refund_amount: Number(input.refundAmount) || 0,
     promotion_cost: Number(input.promotionCost) || 0,
     visitor_count: Number(input.visitorCount) || 0,
@@ -387,7 +393,7 @@ export async function upsertWeeklyProductMetric(input: Partial<WeeklyProductMetr
   if (!user) throw new Error('未登录');
   const payload = {
     user_id: user.id, shop_id: input.shopId, product_id: input.productId, week_start: input.weekStart,
-    sales_amount: Number(input.salesAmount) || 0, sold_quantity: Number(input.soldQuantity) || 0,
+    sales_amount: Number(input.salesAmount) || 0, sold_quantity: Number(input.soldQuantity) || 0, refund_quantity: Number(input.refundQuantity) || 0,
     order_count: Number(input.orderCount) || 0, refund_amount: Number(input.refundAmount) || 0,
     visitor_count: Number(input.visitorCount) || 0, promotion_cost: Number(input.promotionCost) || 0,
     platform_fee: Number(input.platformFee) || 0, shipping_cost: Number(input.shippingCost) || 0,
@@ -694,6 +700,8 @@ function mapProduct(d: any): Product {
     imageUrl: d.image_url,
     salePrice: d.sale_price == null ? undefined : Number(d.sale_price),
     unitCost: d.unit_cost == null ? undefined : Number(d.unit_cost),
+    costMode: d.cost_mode === 'percent' ? 'percent' : 'fixed',
+    costRate: d.cost_rate == null ? undefined : Number(d.cost_rate),
     targetMargin: d.target_margin == null ? undefined : Number(d.target_margin),
     launchDate: d.launch_date || undefined,
     tags: Array.isArray(d.tags) ? d.tags : [],
@@ -713,6 +721,8 @@ function mapDailyMetric(d: any): DailyMetric {
     date: d.date,
     salesAmount: Number(d.sales_amount) || 0,
     orderCount: Number(d.order_count) || 0,
+    soldQuantity: Number(d.sold_quantity ?? d.order_count) || 0,
+    refundQuantity: Number(d.refund_quantity) || 0,
     refundAmount: Number(d.refund_amount) || 0,
     promotionCost: Number(d.promotion_cost) || 0,
     visitorCount: Number(d.visitor_count) || 0,
@@ -723,7 +733,7 @@ function mapDailyMetric(d: any): DailyMetric {
 }
 
 function mapWeeklyProductMetric(d: any): WeeklyProductMetric {
-  return { id: d.id, userId: d.user_id, shopId: d.shop_id, productId: d.product_id, weekStart: d.week_start, salesAmount: Number(d.sales_amount) || 0, soldQuantity: Number(d.sold_quantity) || 0, orderCount: Number(d.order_count) || 0, refundAmount: Number(d.refund_amount) || 0, visitorCount: Number(d.visitor_count) || 0, promotionCost: Number(d.promotion_cost) || 0, platformFee: Number(d.platform_fee) || 0, shippingCost: Number(d.shipping_cost) || 0, otherCost: Number(d.other_cost) || 0, dataSource: d.data_source || 'manual', createdAt: d.created_at, updatedAt: d.updated_at };
+  return { id: d.id, userId: d.user_id, shopId: d.shop_id, productId: d.product_id, weekStart: d.week_start, salesAmount: Number(d.sales_amount) || 0, soldQuantity: Number(d.sold_quantity) || 0, refundQuantity: Number(d.refund_quantity) || 0, orderCount: Number(d.order_count) || 0, refundAmount: Number(d.refund_amount) || 0, visitorCount: Number(d.visitor_count) || 0, promotionCost: Number(d.promotion_cost) || 0, platformFee: Number(d.platform_fee) || 0, shippingCost: Number(d.shipping_cost) || 0, otherCost: Number(d.other_cost) || 0, dataSource: d.data_source || 'manual', createdAt: d.created_at, updatedAt: d.updated_at };
 }
 
 function mapDailyPromotion(d: any): DailyPromotion {

@@ -70,6 +70,8 @@ CREATE TABLE IF NOT EXISTS public.products (
   image_url TEXT,
   sale_price NUMERIC(14,2),
   unit_cost NUMERIC(14,2),
+  cost_mode TEXT NOT NULL DEFAULT 'fixed' CHECK (cost_mode IN ('fixed', 'percent')),
+  cost_rate NUMERIC(5,2),
   target_margin NUMERIC(5,2),
   launch_date DATE,
   tags JSONB NOT NULL DEFAULT '[]'::jsonb,
@@ -91,6 +93,8 @@ CREATE TABLE IF NOT EXISTS public.daily_metrics (
   date DATE NOT NULL,
   sales_amount NUMERIC(14,2) DEFAULT 0,        -- 销售额
   order_count INT DEFAULT 0,                    -- 订单量
+  sold_quantity INT DEFAULT 0,
+  refund_quantity INT DEFAULT 0,
   refund_amount NUMERIC(14,2) DEFAULT 0,        -- 退款金额
   promotion_cost NUMERIC(14,2) DEFAULT 0,       -- 推广费用（总额，用户主录入）
   visitor_count INT DEFAULT 0,                  -- 访客数
@@ -114,6 +118,7 @@ CREATE TABLE IF NOT EXISTS public.weekly_product_metrics (
   week_start DATE NOT NULL,
   sales_amount NUMERIC(14,2) NOT NULL DEFAULT 0,
   sold_quantity INT NOT NULL DEFAULT 0,
+  refund_quantity INT NOT NULL DEFAULT 0,
   order_count INT NOT NULL DEFAULT 0,
   refund_amount NUMERIC(14,2) NOT NULL DEFAULT 0,
   visitor_count INT NOT NULL DEFAULT 0,

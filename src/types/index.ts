@@ -47,6 +47,8 @@ export interface Product {
   imageUrl?: string;
   salePrice?: number;
   unitCost?: number;
+  costMode?: 'fixed' | 'percent';
+  costRate?: number;
   targetMargin?: number;
   launchDate?: string;
   tags?: string[];
@@ -64,6 +66,8 @@ export interface DailyMetric {
   date: string;
   salesAmount: number;
   orderCount: number;
+  soldQuantity: number;
+  refundQuantity: number;
   refundAmount: number;
   promotionCost: number; // 推广费用（总额，用户主录入）
   visitorCount: number;
@@ -81,6 +85,7 @@ export interface WeeklyProductMetric {
   salesAmount: number;
   soldQuantity: number;
   orderCount: number;
+  refundQuantity: number;
   refundAmount: number;
   visitorCount: number;
   promotionCost: number;

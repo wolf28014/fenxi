@@ -105,6 +105,29 @@ CREATE INDEX IF NOT EXISTS idx_daily_metrics_shop_id ON public.daily_metrics(sho
 CREATE INDEX IF NOT EXISTS idx_daily_metrics_product_id ON public.daily_metrics(product_id);
 CREATE INDEX IF NOT EXISTS idx_daily_metrics_date ON public.daily_metrics(date);
 
+-- ============= 周商品经营数据 =============
+CREATE TABLE IF NOT EXISTS public.weekly_product_metrics (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  shop_id UUID NOT NULL REFERENCES public.shops(id) ON DELETE CASCADE,
+  product_id UUID NOT NULL REFERENCES public.products(id) ON DELETE CASCADE,
+  week_start DATE NOT NULL,
+  sales_amount NUMERIC(14,2) NOT NULL DEFAULT 0,
+  sold_quantity INT NOT NULL DEFAULT 0,
+  order_count INT NOT NULL DEFAULT 0,
+  refund_amount NUMERIC(14,2) NOT NULL DEFAULT 0,
+  visitor_count INT NOT NULL DEFAULT 0,
+  promotion_cost NUMERIC(14,2) NOT NULL DEFAULT 0,
+  platform_fee NUMERIC(14,2) NOT NULL DEFAULT 0,
+  shipping_cost NUMERIC(14,2) NOT NULL DEFAULT 0,
+  other_cost NUMERIC(14,2) NOT NULL DEFAULT 0,
+  data_source TEXT NOT NULL DEFAULT 'manual' CHECK (data_source IN ('manual', 'excel', 'api', 'mock')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(shop_id, product_id, week_start)
+);
+CREATE INDEX IF NOT EXISTS idx_weekly_product_metrics_lookup ON public.weekly_product_metrics(user_id, shop_id, product_id, week_start);
+
 -- ============= 7. 每日推广明细表（8项） =============
 CREATE TABLE IF NOT EXISTS public.daily_promotion (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

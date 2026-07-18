@@ -5,6 +5,7 @@ import type {
   DailyMetric,
   DailyPromotion,
   MonthlyCost,
+  WeeklyProductMetric,
 } from '@/types';
 import { calculatePromoTotal, calculateCostTotal } from './calc';
 
@@ -373,6 +374,34 @@ export async function upsertDailyPromotions(inputs: Array<Partial<DailyPromotion
   }
 }
 
+export async function fetchWeeklyProductMetrics(shopId: string | null, productId: string, start: string, end: string): Promise<WeeklyProductMetric[]> {
+  let q = supabase.from('weekly_product_metrics').select('*').gte('week_start', start).lte('week_start', end).eq('product_id', productId);
+  if (shopId) q = q.eq('shop_id', shopId);
+  const { data, error } = await q.order('week_start', { ascending: true });
+  if (error) throw error;
+  return (data || []).map(mapWeeklyProductMetric);
+}
+
+export async function upsertWeeklyProductMetric(input: Partial<WeeklyProductMetric> & { shopId: string; productId: string; weekStart: string }): Promise<WeeklyProductMetric> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('未登录');
+  const payload = {
+    user_id: user.id, shop_id: input.shopId, product_id: input.productId, week_start: input.weekStart,
+    sales_amount: Number(input.salesAmount) || 0, sold_quantity: Number(input.soldQuantity) || 0,
+    order_count: Number(input.orderCount) || 0, refund_amount: Number(input.refundAmount) || 0,
+    visitor_count: Number(input.visitorCount) || 0, promotion_cost: Number(input.promotionCost) || 0,
+    platform_fee: Number(input.platformFee) || 0, shipping_cost: Number(input.shippingCost) || 0,
+    other_cost: Number(input.otherCost) || 0, data_source: input.dataSource || 'manual',
+  };
+  const { data, error } = await supabase.from('weekly_product_metrics').upsert(payload, { onConflict: 'shop_id,product_id,week_start' }).select().single();
+  if (error) throw error;
+  return mapWeeklyProductMetric(data);
+}
+
+export async function upsertWeeklyProductMetrics(inputs: Array<Partial<WeeklyProductMetric> & { shopId: string; productId: string; weekStart: string }>): Promise<void> {
+  for (const input of inputs) await upsertWeeklyProductMetric(input);
+}
+
 // ============= 月度成本 =============
 
 export async function fetchMonthlyCosts(
@@ -691,6 +720,10 @@ function mapDailyMetric(d: any): DailyMetric {
     createdAt: d.created_at,
     updatedAt: d.updated_at,
   };
+}
+
+function mapWeeklyProductMetric(d: any): WeeklyProductMetric {
+  return { id: d.id, userId: d.user_id, shopId: d.shop_id, productId: d.product_id, weekStart: d.week_start, salesAmount: Number(d.sales_amount) || 0, soldQuantity: Number(d.sold_quantity) || 0, orderCount: Number(d.order_count) || 0, refundAmount: Number(d.refund_amount) || 0, visitorCount: Number(d.visitor_count) || 0, promotionCost: Number(d.promotion_cost) || 0, platformFee: Number(d.platform_fee) || 0, shippingCost: Number(d.shipping_cost) || 0, otherCost: Number(d.other_cost) || 0, dataSource: d.data_source || 'manual', createdAt: d.created_at, updatedAt: d.updated_at };
 }
 
 function mapDailyPromotion(d: any): DailyPromotion {

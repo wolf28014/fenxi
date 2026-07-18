@@ -72,6 +72,26 @@ export interface DailyMetric {
   updatedAt: string;
 }
 
+export interface WeeklyProductMetric {
+  id: string;
+  userId: string;
+  shopId: string;
+  productId: string;
+  weekStart: string;
+  salesAmount: number;
+  soldQuantity: number;
+  orderCount: number;
+  refundAmount: number;
+  visitorCount: number;
+  promotionCost: number;
+  platformFee: number;
+  shippingCost: number;
+  otherCost: number;
+  dataSource: DataSource;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface DailyPromotion {
   id: string;
   userId: string;

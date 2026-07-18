@@ -17,6 +17,7 @@ import {
 } from '@/lib/db';
 import { showToast } from '@/components/Toast';
 import Modal from '@/components/Modal';
+import ColumnVisibilityMenu, { useColumnVisibility, type ColumnOption } from '@/components/ColumnVisibilityMenu';
 import {
   calculateDailyRows,
   calculateMonthlyRows,
@@ -409,6 +410,18 @@ export default function DetailView({ currentShop, shops }: Props) {
   );
 }
 
+type DisplayColumn = ColumnOption & {
+  type?: 'currency' | 'number' | 'percent' | 'ratio';
+};
+
+function formatTableValue(column: DisplayColumn, value: number | string): string {
+  if (column.type === 'currency') return formatCurrency(Number(value));
+  if (column.type === 'number') return formatNumber(Number(value));
+  if (column.type === 'percent') return formatPercent(Number(value));
+  if (column.type === 'ratio') return formatRatio(Number(value));
+  return String(value ?? '');
+}
+
 // ============= 每日销售明细表（含累积值） =============
 function DailySalesTable({ rows, shopNameMap, showShop, onEdit, onDelete, onBatchDelete }: {
   rows: any[];
@@ -420,6 +433,29 @@ function DailySalesTable({ rows, shopNameMap, showShop, onEdit, onDelete, onBatc
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [batchMode, setBatchMode] = useState(false);
+
+  const columns: DisplayColumn[] = useMemo(() => [
+    { key: 'salesAmount', label: '销售额', type: 'currency', group: '基础指标' },
+    { key: 'orderCount', label: '订单', type: 'number', group: '基础指标' },
+    { key: 'refundAmount', label: '退款', type: 'currency', group: '基础指标' },
+    { key: 'promotionCost', label: '推广费', type: 'currency', group: '基础指标' },
+    { key: 'visitorCount', label: '访客数', type: 'number', group: '基础指标' },
+    { key: 'netSales', label: '净销售', type: 'currency', group: '当期指标' },
+    { key: 'refundRate', label: '退款率', type: 'percent', group: '当期指标' },
+    { key: 'promoRate', label: '推广占比', type: 'percent', group: '当期指标' },
+    { key: 'dailyROI', label: '投产比', type: 'ratio', group: '当期指标' },
+    { key: 'cumSales', label: '累积销售', type: 'currency', group: '累计指标' },
+    { key: 'cumRefund', label: '累积退款', type: 'currency', group: '累计指标' },
+    { key: 'cumRefundRate', label: '累积退款率', type: 'percent', group: '累计指标' },
+    { key: 'cumNetSales', label: '累积净销售', type: 'currency', group: '累计指标' },
+    { key: 'cumPromoCost', label: '累积推广费', type: 'currency', group: '累计指标' },
+    { key: 'cumPromoRate', label: '累积推广占比', type: 'percent', group: '累计指标' },
+    { key: 'cumNetPromoRate', label: '累积净推广率', type: 'percent', group: '累计指标' },
+    { key: 'cumNetROI', label: '累积净投产比', type: 'ratio', group: '累计指标' },
+    { key: 'cumROI', label: '累积投产比', type: 'ratio', group: '累计指标' },
+  ], []);
+  const visibility = useColumnVisibility('ecom-columns-daily-v1', columns);
+  const visibleColumns = columns.filter((column) => visibility.visibleKeys.has(column.key));
 
   if (rows.length === 0) return <div className="card p-12 text-center text-slate-400">暂无数据</div>;
 
@@ -467,29 +503,26 @@ function DailySalesTable({ rows, shopNameMap, showShop, onEdit, onDelete, onBatc
   const summaryPromoRate = summary.salesAmount > 0 ? (summary.promotionCost / summary.salesAmount) * 100 : 0;
   const summaryROI = summary.promotionCost > 0 ? summary.salesAmount / summary.promotionCost : 0;
   const summaryNetROI = last.cumPromoCost > 0 ? last.cumNetSales / last.cumPromoCost : 0;
-
-  const headers = [
-    { key: 'date', label: '日期' },
-    ...(showShop ? [{ key: 'shopName', label: '店铺' }] : []),
-    { key: 'salesAmount', label: '销售额', type: 'currency' },
-    { key: 'orderCount', label: '订单', type: 'number' },
-    { key: 'refundAmount', label: '退款', type: 'currency' },
-    { key: 'promotionCost', label: '推广费', type: 'currency' },
-    { key: 'visitorCount', label: '访客数', type: 'number' },
-    { key: 'netSales', label: '净销售', type: 'currency' },
-    { key: 'refundRate', label: '退款率', type: 'percent' },
-    { key: 'promoRate', label: '推广占比', type: 'percent' },
-    { key: 'dailyROI', label: '投产比', type: 'ratio' },
-    { key: 'cumSales', label: '累积销售', type: 'currency' },
-    { key: 'cumRefund', label: '累积退款', type: 'currency' },
-    { key: 'cumRefundRate', label: '累积退款率', type: 'percent' },
-    { key: 'cumNetSales', label: '累积净销售', type: 'currency' },
-    { key: 'cumPromoCost', label: '累积推广费', type: 'currency' },
-    { key: 'cumPromoRate', label: '累积推广占比', type: 'percent' },
-    { key: 'cumNetPromoRate', label: '累积净推广率', type: 'percent' },
-    { key: 'cumNetROI', label: '累积净投产比', type: 'ratio' },
-    { key: 'cumROI', label: '累积投产比', type: 'ratio' },
-  ];
+  const summaryValues: Record<string, number> = {
+    salesAmount: summary.salesAmount,
+    orderCount: summary.orderCount,
+    refundAmount: summary.refundAmount,
+    promotionCost: summary.promotionCost,
+    visitorCount: summary.visitorCount,
+    netSales: summary.netSales,
+    refundRate: summaryRefundRate,
+    promoRate: summaryPromoRate,
+    dailyROI: summaryROI,
+    cumSales: last.cumSales,
+    cumRefund: last.cumRefund,
+    cumRefundRate: last.cumRefundRate,
+    cumNetSales: last.cumNetSales,
+    cumPromoCost: last.cumPromoCost,
+    cumPromoRate: last.cumPromoRate,
+    cumNetPromoRate: last.cumNetPromoRate,
+    cumNetROI: summaryNetROI,
+    cumROI: last.cumROI,
+  };
 
   return (
     <div className="space-y-2">
@@ -511,6 +544,13 @@ function DailySalesTable({ rows, shopNameMap, showShop, onEdit, onDelete, onBatc
             <button onClick={() => { setBatchMode(false); setSelected(new Set()); }} className="btn-ghost text-xs">取消</button>
           </>
         )}
+        <ColumnVisibilityMenu
+          columns={columns}
+          visibleKeys={visibility.visibleKeys}
+          onToggle={visibility.toggleColumn}
+          onShowAll={visibility.showAll}
+          onReset={visibility.reset}
+        />
       </div>
 
       <div className="card">
@@ -528,8 +568,10 @@ function DailySalesTable({ rows, shopNameMap, showShop, onEdit, onDelete, onBatc
                     />
                   </th>
                 )}
-              {headers.map((h) => (
-                <th key={h.key} className={`px-3 py-2.5 whitespace-nowrap ${h.type === 'currency' || h.type === 'number' || h.type === 'percent' || h.type === 'ratio' ? 'text-right' : 'text-left'}`}>{h.label}</th>
+              <th className="px-3 py-2.5 text-left whitespace-nowrap">日期</th>
+              {showShop && <th className="px-3 py-2.5 text-left whitespace-nowrap">店铺</th>}
+              {visibleColumns.map((column) => (
+                <th key={column.key} className="px-3 py-2.5 whitespace-nowrap text-right">{column.label}</th>
               ))}
               <th className="px-3 py-2.5 text-right">操作</th>
             </tr>
@@ -547,15 +589,12 @@ function DailySalesTable({ rows, shopNameMap, showShop, onEdit, onDelete, onBatc
                     />
                   </td>
                 )}
-                {headers.map((h) => {
-                  const val = r[h.key];
-                  let display: string = val;
-                  if (h.type === 'currency') display = formatCurrency(val);
-                  else if (h.type === 'number') display = formatNumber(val);
-                  else if (h.type === 'percent') display = formatPercent(val);
-                  else if (h.type === 'ratio') display = formatRatio(val);
+                <td className="px-3 py-2 whitespace-nowrap">{r.date}</td>
+                {showShop && <td className="px-3 py-2 whitespace-nowrap">{shopNameMap?.[r.shopId] || r.shopName || '-'}</td>}
+                {visibleColumns.map((column) => {
+                  const val = r[column.key];
                   return (
-                    <td key={h.key} className={`px-3 py-2 whitespace-nowrap ${h.type ? 'text-right' : 'text-left'} ${h.key === 'netSales' && val < 0 ? 'text-red-500' : ''} ${h.key === 'refundRate' && val > 10 ? 'text-red-500' : ''}`}>{display}</td>
+                    <td key={column.key} className={`px-3 py-2 whitespace-nowrap text-right ${column.key === 'netSales' && val < 0 ? 'text-red-500' : ''} ${column.key === 'refundRate' && val > 10 ? 'text-red-500' : ''}`}>{formatTableValue(column, val)}</td>
                   );
                 })}
                 <td className="px-3 py-2 text-right whitespace-nowrap">
@@ -575,24 +614,11 @@ function DailySalesTable({ rows, shopNameMap, showShop, onEdit, onDelete, onBatc
               {batchMode && <td className="px-3 py-2.5"></td>}
               <td className="px-3 py-2.5">汇总</td>
               {showShop && <td className="px-3 py-2.5">-</td>}
-              <td className="px-3 py-2.5 text-right">{formatCurrency(summary.salesAmount)}</td>
-              <td className="px-3 py-2.5 text-right">{formatNumber(summary.orderCount)}</td>
-              <td className="px-3 py-2.5 text-right">{formatCurrency(summary.refundAmount)}</td>
-              <td className="px-3 py-2.5 text-right">{formatCurrency(summary.promotionCost)}</td>
-              <td className="px-3 py-2.5 text-right">{formatNumber(summary.visitorCount)}</td>
-              <td className="px-3 py-2.5 text-right">{formatCurrency(summary.netSales)}</td>
-              <td className="px-3 py-2.5 text-right">{formatPercent(summaryRefundRate)}</td>
-              <td className="px-3 py-2.5 text-right">{formatPercent(summaryPromoRate)}</td>
-              <td className="px-3 py-2.5 text-right">{formatRatio(summaryROI)}</td>
-              <td className="px-3 py-2.5 text-right">{formatCurrency(last.cumSales)}</td>
-              <td className="px-3 py-2.5 text-right">{formatCurrency(last.cumRefund)}</td>
-              <td className="px-3 py-2.5 text-right">{formatPercent(last.cumRefundRate)}</td>
-              <td className="px-3 py-2.5 text-right">{formatCurrency(last.cumNetSales)}</td>
-              <td className="px-3 py-2.5 text-right">{formatCurrency(last.cumPromoCost)}</td>
-              <td className="px-3 py-2.5 text-right">{formatPercent(last.cumPromoRate)}</td>
-              <td className="px-3 py-2.5 text-right">{formatPercent(last.cumNetPromoRate)}</td>
-              <td className="px-3 py-2.5 text-right">{formatRatio(summaryNetROI)}</td>
-              <td className="px-3 py-2.5 text-right">{formatRatio(last.cumROI)}</td>
+              {visibleColumns.map((column) => (
+                <td key={column.key} className="px-3 py-2.5 text-right whitespace-nowrap">
+                  {formatTableValue(column, summaryValues[column.key] || 0)}
+                </td>
+              ))}
               <td className="px-3 py-2.5"></td>
             </tr>
           </tfoot>
@@ -605,6 +631,29 @@ function DailySalesTable({ rows, shopNameMap, showShop, onEdit, onDelete, onBatc
 
 // ============= 每月销售汇总表 =============
 function MonthlySalesTable({ rows, onEdit, onDelete }: { rows: any[]; onEdit: (id: string) => void; onDelete: (id: string) => void }) {
+  const columns: DisplayColumn[] = useMemo(() => [
+    { key: 'salesAmount', label: '销售额', type: 'currency', group: '基础指标' },
+    { key: 'orderCount', label: '订单', type: 'number', group: '基础指标' },
+    { key: 'refundAmount', label: '退款', type: 'currency', group: '基础指标' },
+    { key: 'promotionCost', label: '推广费', type: 'currency', group: '基础指标' },
+    { key: 'visitorCount', label: '访客数', type: 'number', group: '基础指标' },
+    { key: 'netSales', label: '净销售', type: 'currency', group: '当月指标' },
+    { key: 'refundRate', label: '退款率', type: 'percent', group: '当月指标' },
+    { key: 'promoRate', label: '推广占比', type: 'percent', group: '当月指标' },
+    { key: 'monthlyROI', label: '月投产比', type: 'ratio', group: '当月指标' },
+    { key: 'cumSales', label: '累积销售', type: 'currency', group: '累计指标' },
+    { key: 'cumRefund', label: '累积退款', type: 'currency', group: '累计指标' },
+    { key: 'cumRefundRate', label: '累积退款率', type: 'percent', group: '累计指标' },
+    { key: 'cumNetSales', label: '累积净销售', type: 'currency', group: '累计指标' },
+    { key: 'cumPromoCost', label: '累积推广费', type: 'currency', group: '累计指标' },
+    { key: 'cumPromoRate', label: '累积推广占比', type: 'percent', group: '累计指标' },
+    { key: 'cumNetPromoRate', label: '累积净推广率', type: 'percent', group: '累计指标' },
+    { key: 'cumNetROI', label: '累积净投产比', type: 'ratio', group: '累计指标' },
+    { key: 'cumROI', label: '累积投产比', type: 'ratio', group: '累计指标' },
+  ], []);
+  const visibility = useColumnVisibility('ecom-columns-monthly-v1', columns);
+  const visibleColumns = columns.filter((column) => visibility.visibleKeys.has(column.key));
+
   if (rows.length === 0) return <div className="card p-12 text-center text-slate-400">暂无数据</div>;
 
   const summary = rows.reduce(
@@ -625,81 +674,73 @@ function MonthlySalesTable({ rows, onEdit, onDelete }: { rows: any[]; onEdit: (i
   const summaryROI = summary.promotionCost > 0 ? summary.salesAmount / summary.promotionCost : 0;
   const summaryNetROI = last.cumPromoCost > 0 ? last.cumNetSales / last.cumPromoCost : 0;
 
+  const summaryValues: Record<string, number> = {
+    salesAmount: summary.salesAmount,
+    orderCount: summary.orderCount,
+    refundAmount: summary.refundAmount,
+    promotionCost: summary.promotionCost,
+    visitorCount: summary.visitorCount,
+    netSales: summary.netSales,
+    refundRate: summaryRefundRate,
+    promoRate: summaryPromoRate,
+    monthlyROI: summaryROI,
+    cumSales: last.cumSales,
+    cumRefund: last.cumRefund,
+    cumRefundRate: last.cumRefundRate,
+    cumNetSales: last.cumNetSales,
+    cumPromoCost: last.cumPromoCost,
+    cumPromoRate: last.cumPromoRate,
+    cumNetPromoRate: last.cumNetPromoRate,
+    cumNetROI: summaryNetROI,
+    cumROI: last.cumROI,
+  };
+
   return (
-    <div className="card">
+    <div className="space-y-2">
+      <div className="flex items-center justify-end text-xs">
+        <ColumnVisibilityMenu
+          columns={columns}
+          visibleKeys={visibility.visibleKeys}
+          onToggle={visibility.toggleColumn}
+          onShowAll={visibility.showAll}
+          onReset={visibility.reset}
+        />
+      </div>
+      <div className="card">
       <div className="overflow-auto max-h-[70vh]">
         <table className="w-full text-sm freeze-header">
           <thead className="bg-primary-700 text-white">
             <tr>
               <th className="px-3 py-2.5 text-left">月份</th>
-              <th className="px-3 py-2.5 text-right">销售额</th>
-              <th className="px-3 py-2.5 text-right">订单</th>
-              <th className="px-3 py-2.5 text-right">退款</th>
-              <th className="px-3 py-2.5 text-right">推广费</th>
-              <th className="px-3 py-2.5 text-right">访客数</th>
-              <th className="px-3 py-2.5 text-right">净销售</th>
-              <th className="px-3 py-2.5 text-right">退款率</th>
-              <th className="px-3 py-2.5 text-right">推广占比</th>
-              <th className="px-3 py-2.5 text-right">月投产比</th>
-              <th className="px-3 py-2.5 text-right">累积销售</th>
-              <th className="px-3 py-2.5 text-right">累积退款</th>
-              <th className="px-3 py-2.5 text-right">累积退款率</th>
-              <th className="px-3 py-2.5 text-right">累积净销售</th>
-              <th className="px-3 py-2.5 text-right">累积推广费</th>
-              <th className="px-3 py-2.5 text-right">累积推广占比</th>
-              <th className="px-3 py-2.5 text-right">累积净推广率</th>
-              <th className="px-3 py-2.5 text-right">累积净投产比</th>
-              <th className="px-3 py-2.5 text-right">累积投产比</th>
+              {visibleColumns.map((column) => (
+                <th key={column.key} className="px-3 py-2.5 text-right whitespace-nowrap">{column.label}</th>
+              ))}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
             {rows.map((r, i) => (
               <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-700/30">
                 <td className="px-3 py-2 whitespace-nowrap">{r.yearMonth}</td>
-                <td className="px-3 py-2 text-right whitespace-nowrap">{formatCurrency(r.salesAmount)}</td>
-                <td className="px-3 py-2 text-right">{formatNumber(r.orderCount)}</td>
-                <td className="px-3 py-2 text-right whitespace-nowrap">{formatCurrency(r.refundAmount)}</td>
-                <td className="px-3 py-2 text-right whitespace-nowrap">{formatCurrency(r.promotionCost)}</td>
-                <td className="px-3 py-2 text-right">{formatNumber(r.visitorCount)}</td>
-                <td className={`px-3 py-2 text-right whitespace-nowrap ${r.netSales < 0 ? 'text-red-500' : ''}`}>{formatCurrency(r.netSales)}</td>
-                <td className={`px-3 py-2 text-right ${r.refundRate > 10 ? 'text-red-500' : ''}`}>{formatPercent(r.refundRate)}</td>
-                <td className="px-3 py-2 text-right">{formatPercent(r.promoRate)}</td>
-                <td className="px-3 py-2 text-right">{formatRatio(r.monthlyROI)}</td>
-                <td className="px-3 py-2 text-right whitespace-nowrap">{formatCurrency(r.cumSales)}</td>
-                <td className="px-3 py-2 text-right whitespace-nowrap">{formatCurrency(r.cumRefund)}</td>
-                <td className={`px-3 py-2 text-right ${r.cumRefundRate > 10 ? 'text-red-500' : ''}`}>{formatPercent(r.cumRefundRate)}</td>
-                <td className="px-3 py-2 text-right whitespace-nowrap">{formatCurrency(r.cumNetSales)}</td>
-                <td className="px-3 py-2 text-right whitespace-nowrap">{formatCurrency(r.cumPromoCost)}</td>
-                <td className="px-3 py-2 text-right">{formatPercent(r.cumPromoRate)}</td>
-                <td className="px-3 py-2 text-right">{formatPercent(r.cumNetPromoRate)}</td>
-                <td className="px-3 py-2 text-right">{formatRatio(r.cumNetROI)}</td>
-                <td className="px-3 py-2 text-right">{formatRatio(r.cumROI)}</td>
+                {visibleColumns.map((column) => (
+                  <td key={column.key} className={`px-3 py-2 text-right whitespace-nowrap ${column.key === 'netSales' && r[column.key] < 0 ? 'text-red-500' : ''} ${(column.key === 'refundRate' || column.key === 'cumRefundRate') && r[column.key] > 10 ? 'text-red-500' : ''}`}>
+                    {formatTableValue(column, r[column.key])}
+                  </td>
+                ))}
               </tr>
             ))}
           </tbody>
           <tfoot className="bg-slate-900 text-white">
             <tr className="font-semibold">
               <td className="px-3 py-2.5">汇总</td>
-              <td className="px-3 py-2.5 text-right">{formatCurrency(summary.salesAmount)}</td>
-              <td className="px-3 py-2.5 text-right">{formatNumber(summary.orderCount)}</td>
-              <td className="px-3 py-2.5 text-right">{formatCurrency(summary.refundAmount)}</td>
-              <td className="px-3 py-2.5 text-right">{formatCurrency(summary.promotionCost)}</td>
-              <td className="px-3 py-2.5 text-right">{formatNumber(summary.visitorCount)}</td>
-              <td className="px-3 py-2.5 text-right">{formatCurrency(summary.netSales)}</td>
-              <td className="px-3 py-2.5 text-right">{formatPercent(summaryRefundRate)}</td>
-              <td className="px-3 py-2.5 text-right">{formatPercent(summaryPromoRate)}</td>
-              <td className="px-3 py-2.5 text-right">{formatRatio(summaryROI)}</td>
-              <td className="px-3 py-2.5 text-right">{formatCurrency(last.cumSales)}</td>
-              <td className="px-3 py-2.5 text-right">{formatCurrency(last.cumRefund)}</td>
-              <td className="px-3 py-2.5 text-right">{formatPercent(last.cumRefundRate)}</td>
-              <td className="px-3 py-2.5 text-right">{formatCurrency(last.cumNetSales)}</td>
-              <td className="px-3 py-2.5 text-right">{formatCurrency(last.cumPromoCost)}</td>
-              <td className="px-3 py-2.5 text-right">{formatPercent(last.cumPromoRate)}</td>
-              <td className="px-3 py-2.5 text-right">{formatPercent(last.cumNetPromoRate)}</td>
-              <td className="px-3 py-2.5 text-right">{formatRatio(summaryNetROI)}</td>
+              {visibleColumns.map((column) => (
+                <td key={column.key} className="px-3 py-2.5 text-right whitespace-nowrap">
+                  {formatTableValue(column, summaryValues[column.key] || 0)}
+                </td>
+              ))}
             </tr>
           </tfoot>
         </table>
+      </div>
       </div>
     </div>
   );
@@ -716,6 +757,13 @@ function CostTable({ costs, shopNameMap, showShop, onEdit, onDelete, onBatchDele
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [batchMode, setBatchMode] = useState(false);
+
+  const columns: DisplayColumn[] = useMemo(() => [
+    ...COST_FIELDS.map((field) => ({ key: field.key, label: field.label, type: 'currency' as const, group: '成本项目' })),
+    { key: 'total', label: '合计', type: 'currency', group: '汇总' },
+  ], []);
+  const visibility = useColumnVisibility('ecom-columns-cost-v1', columns);
+  const visibleColumns = columns.filter((column) => visibility.visibleKeys.has(column.key));
 
   if (costs.length === 0) return <div className="card p-12 text-center text-slate-400">暂无数据</div>;
 
@@ -776,6 +824,13 @@ function CostTable({ costs, shopNameMap, showShop, onEdit, onDelete, onBatchDele
             <button onClick={() => { setBatchMode(false); setSelected(new Set()); }} className="btn-ghost text-xs">取消</button>
           </>
         )}
+        <ColumnVisibilityMenu
+          columns={columns}
+          visibleKeys={visibility.visibleKeys}
+          onToggle={visibility.toggleColumn}
+          onShowAll={visibility.showAll}
+          onReset={visibility.reset}
+        />
       </div>
 
       <div className="card">
@@ -795,10 +850,9 @@ function CostTable({ costs, shopNameMap, showShop, onEdit, onDelete, onBatchDele
                 )}
               <th className="px-3 py-2.5 text-left sticky left-0 bg-primary-700">年-月</th>
               {showShop && <th className="px-3 py-2.5 text-left">店铺</th>}
-              {COST_FIELDS.map((f) => (
-                <th key={f.key} className="px-3 py-2.5 text-right whitespace-nowrap">{f.label}</th>
+              {visibleColumns.map((column) => (
+                <th key={column.key} className={`px-3 py-2.5 text-right whitespace-nowrap ${column.key === 'total' ? 'bg-primary-800' : ''}`}>{column.label}</th>
               ))}
-              <th className="px-3 py-2.5 text-right bg-primary-800">合计</th>
               <th className="px-3 py-2.5 text-right">操作</th>
             </tr>
           </thead>
@@ -817,13 +871,12 @@ function CostTable({ costs, shopNameMap, showShop, onEdit, onDelete, onBatchDele
                 )}
                 <td className="px-3 py-2 sticky left-0 bg-white dark:bg-slate-800">{c.year}-{String(c.month).padStart(2, '0')}</td>
                 {showShop && <td className="px-3 py-2">{shopNameMap?.[c.shopId] || '-'}</td>}
-                {COST_FIELDS.map((f) => (
-                  <td key={f.key} className="px-3 py-2 text-right whitespace-nowrap">{formatCurrency(c[f.key as keyof MonthlyCost] as number)}</td>
+                {visibleColumns.map((column) => (
+                  <td key={column.key} className={`px-3 py-2 text-right whitespace-nowrap ${column.key === 'total' ? 'font-medium bg-primary-50/50 dark:bg-primary-900/10' : ''}`}>
+                    {formatTableValue(column, Number(c[column.key as keyof MonthlyCost]) || 0)}
+                    {column.key === 'total' && c.isTotalOverridden && <span className="ml-1 text-amber-500 text-xs">✎</span>}
+                  </td>
                 ))}
-                <td className="px-3 py-2 text-right font-medium bg-primary-50/50 dark:bg-primary-900/10 whitespace-nowrap">
-                  {formatCurrency(c.total)}
-                  {c.isTotalOverridden && <span className="ml-1 text-amber-500 text-xs">✎</span>}
-                </td>
                 <td className="px-3 py-2 text-right whitespace-nowrap">
                   {!batchMode && (
                     <>
@@ -840,10 +893,11 @@ function CostTable({ costs, shopNameMap, showShop, onEdit, onDelete, onBatchDele
               {batchMode && <td className="px-3 py-2.5"></td>}
               <td className="px-3 py-2.5 sticky left-0 bg-slate-900">汇总</td>
               {showShop && <td className="px-3 py-2.5">-</td>}
-              {COST_FIELDS.map((f) => (
-                <td key={f.key} className="px-3 py-2.5 text-right whitespace-nowrap">{formatCurrency(summary[f.key] || 0)}</td>
+              {visibleColumns.map((column) => (
+                <td key={column.key} className={`px-3 py-2.5 text-right whitespace-nowrap ${column.key === 'total' ? 'bg-primary-950' : ''}`}>
+                  {formatTableValue(column, summary[column.key] || 0)}
+                </td>
               ))}
-              <td className="px-3 py-2.5 text-right bg-primary-950">{formatCurrency(summary.total)}</td>
               <td className="px-3 py-2.5"></td>
             </tr>
           </tfoot>

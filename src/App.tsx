@@ -198,7 +198,9 @@ export default function App() {
           <div className="flex-1 p-4 lg:p-6 min-w-0">
             {tab === 'analysis' && <AnalysisView currentShop={currentShop} shops={shops} setShops={setShops} />}
             {tab === 'detail' && <DetailView currentShop={currentShop} shops={shops} setShops={setShops} setCurrentShop={setCurrentShop} />}
-            {tab === 'product' && <ProductView currentShop={currentShop} shops={shops} setShops={setShops} />}
+            <div className={tab === 'product' ? '' : 'hidden'}>
+              <ProductView currentShop={currentShop} shops={shops} setShops={setShops} />
+            </div>
             {tab === 'shop' && <ShopView shops={shops} setShops={setShops} setCurrentShop={setCurrentShop} currentShop={currentShop} />}
             {tab === 'notes' && <NotesView currentShop={currentShop} shops={shops} />}
             {tab === 'ai' && <AIView currentShop={currentShop} shops={shops} />}

@@ -1,6 +1,7 @@
-import * as XLSX from 'xlsx';
+import type * as ExcelJS from 'exceljs';
 import { upsertDailyMetric, upsertDailyPromotion, upsertMonthlyCost, fetchMonthlyCosts, upsertDailyMetrics, upsertDailyPromotions, upsertMonthlyCosts } from './db';
 import { PROMOTION_FIELDS, COST_FIELDS, type Shop, type MonthlyCost } from '@/types';
+import { formatLocalDate } from './calc';
 
 // ============= 生意参谋字段映射表 =============
 // 生意参谋导出的字段名 → 软件字段
@@ -32,7 +33,8 @@ const SYP_FIELD_MAP: Record<string, { target: 'metric' | 'promo'; key: string; l
 
 // ============= 下载模板 =============
 
-export function exportToExcelTemplate(type: 'metrics' | 'promotions' | 'costs' | 'syp') {
+export async function exportToExcelTemplate(type: 'metrics' | 'promotions' | 'costs' | 'syp') {
+  const ExcelJSRuntime = await getExcelJS();
   let headers: string[] = [];
   let sheetName = '';
   let sampleRows: any[] = [];
@@ -70,10 +72,11 @@ export function exportToExcelTemplate(type: 'metrics' | 'promotions' | 'costs' |
     ];
   }
 
-  const ws = XLSX.utils.json_to_sheet(sampleRows, { header: headers });
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, sheetName);
-  XLSX.writeFile(wb, `${sheetName}.xlsx`);
+  const wb = new ExcelJSRuntime.Workbook();
+  const ws = wb.addWorksheet(sheetName);
+  ws.columns = headers.map((header) => ({ header, key: header, width: 18 }));
+  ws.addRows(sampleRows);
+  await downloadWorkbook(wb, `${sheetName}.xlsx`);
 }
 
 // ============= 解析数字（处理 "2.24%" / "¥1,234" 等格式） =============
@@ -102,7 +105,7 @@ function parseDate(val: any): string {
     const m = val.getMonth() + 1;
     const d = val.getDate();
     if (y >= 2000 && y <= 2100 && m >= 1 && m <= 12 && d >= 1 && d <= 31) {
-      return val.toISOString().slice(0, 10);
+      return formatLocalDate(val);
     }
     return '';
   }
@@ -166,10 +169,23 @@ export async function parseExcelFile(
   file: File,
   hintType?: 'metrics' | 'promotions' | 'costs' | 'auto',
 ): Promise<ParseResult> {
+  if (file.size > 10 * 1024 * 1024) throw new Error('文件不能超过 10MB');
+  const ExcelJSRuntime = await getExcelJS();
   const buffer = await file.arrayBuffer();
-  const wb = XLSX.read(buffer, { type: 'array' });
-  const ws = wb.Sheets[wb.SheetNames[0]];
-  const rows = XLSX.utils.sheet_to_json<any>(ws, { defval: '', raw: false });
+  const wb = new ExcelJSRuntime.Workbook();
+  await wb.xlsx.load(buffer);
+  const ws = wb.worksheets[0];
+  if (!ws) throw new Error('文件没有工作表');
+  const headers = (ws.getRow(1).values as unknown[]).slice(1).map((value) => String(value ?? '').trim());
+  const rows: ParsedRow[] = [];
+  ws.eachRow((row: ExcelJS.Row, rowNumber: number) => {
+    if (rows.length >= 100_000) return;
+    if (rowNumber === 1) return;
+    const values = row.values as unknown[];
+    const parsed: ParsedRow = {};
+    headers.forEach((header, index) => { parsed[header] = String(values[index + 1] ?? ''); });
+    rows.push(parsed);
+  });
 
   if (rows.length === 0) throw new Error('文件无数据');
 
@@ -671,6 +687,7 @@ export async function importFromClipboard(
       PROMOTION_FIELDS.forEach((f) => {
         payload[f.key] = parseNumber(row[f.label]);
       });
+      payload.dataSource = 'excel';
       await upsertDailyPromotion(payload);
     } else {
       // 新格式：月份 / 业务大类 / 扣费金额合计
@@ -723,12 +740,13 @@ export async function importFromClipboard(
 
 // ============= 导出数据 =============
 
-export function exportDataToExcel(
+export async function exportDataToExcel(
   shop: Shop,
   productName: string | undefined | null,
   data: { metrics: any[]; promotions: any[]; costs: any[] },
 ) {
-  const wb = XLSX.utils.book_new();
+  const ExcelJSRuntime = await getExcelJS();
+  const wb = new ExcelJSRuntime.Workbook();
   const prefix = `${shop.name}${productName ? '_' + productName : ''}`;
 
   // 每日指标
@@ -740,8 +758,7 @@ export function exportDataToExcel(
       退款金额: m.refundAmount,
       访客数: m.visitorCount,
     }));
-    const ws = XLSX.utils.json_to_sheet(rows);
-    XLSX.utils.book_append_sheet(wb, ws, '每日指标');
+    addObjectRows(wb.addWorksheet('每日指标'), rows);
   }
 
   // 推广
@@ -754,8 +771,7 @@ export function exportDataToExcel(
       row['合计'] = p.total;
       return row;
     });
-    const ws = XLSX.utils.json_to_sheet(rows);
-    XLSX.utils.book_append_sheet(wb, ws, '每日推广');
+    addObjectRows(wb.addWorksheet('每日推广'), rows);
   }
 
   // 成本
@@ -768,9 +784,31 @@ export function exportDataToExcel(
       row['合计'] = c.total;
       return row;
     });
-    const ws = XLSX.utils.json_to_sheet(rows);
-    XLSX.utils.book_append_sheet(wb, ws, '月度成本');
+    addObjectRows(wb.addWorksheet('月度成本'), rows);
   }
 
-  XLSX.writeFile(wb, `${prefix}_数据导出.xlsx`);
+  await downloadWorkbook(wb, `${prefix}_数据导出.xlsx`);
+}
+
+function addObjectRows(sheet: ExcelJS.Worksheet, rows: Record<string, unknown>[]) {
+  if (rows.length === 0) return;
+  const headers = Object.keys(rows[0]);
+  sheet.columns = headers.map((header) => ({ header, key: header, width: 18 }));
+  sheet.addRows(rows);
+}
+
+async function downloadWorkbook(workbook: ExcelJS.Workbook, filename: string) {
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+async function getExcelJS(): Promise<typeof import('exceljs')> {
+  const module = await import('exceljs');
+  return (module as any).default || module;
 }

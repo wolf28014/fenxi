@@ -14,6 +14,7 @@ import {
   getSeasonalYearRange,
   getLastYearSameRange,
   getQuickRange,
+  formatLocalDate,
   formatCurrency,
   formatPercent,
   formatNumber,
@@ -34,8 +35,8 @@ export default function AnalysisView({ currentShop, shops }: Props) {
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<string>('');
   const [rangeType, setRangeType] = useState<QuickRangeType>('thisMonth');
-  const [customStart, setCustomStart] = useState(new Date().toISOString().slice(0, 10));
-  const [customEnd, setCustomEnd] = useState(new Date().toISOString().slice(0, 10));
+  const [customStart, setCustomStart] = useState(formatLocalDate(new Date()));
+  const [customEnd, setCustomEnd] = useState(formatLocalDate(new Date()));
   const [metrics, setMetrics] = useState<DailyMetric[]>([]);
   const [promotions, setPromotions] = useState<DailyPromotion[]>([]);
   const [costs, setCosts] = useState<MonthlyCost[]>([]);

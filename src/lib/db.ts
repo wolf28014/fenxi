@@ -194,11 +194,29 @@ export async function upsertDailyMetric(input: Partial<DailyMetric> & { shopId: 
     data_source: input.dataSource || 'manual',
   };
 
-  const { data, error } = await supabase
-    .from('daily_metrics')
-    .upsert(payload, { onConflict: 'shop_id,product_id,date' })
-    .select()
-    .single();
+  let data: any;
+  let error: any;
+  if (input.productId == null) {
+    const existing = await supabase
+      .from('daily_metrics')
+      .select('id')
+      .eq('shop_id', input.shopId)
+      .is('product_id', null)
+      .eq('date', input.date)
+      .maybeSingle();
+    if (existing.error) throw existing.error;
+    if (existing.data?.id) {
+      ({ data, error } = await supabase.from('daily_metrics').update(payload).eq('id', existing.data.id).select().single());
+    } else {
+      ({ data, error } = await supabase.from('daily_metrics').insert(payload).select().single());
+    }
+  } else {
+    ({ data, error } = await supabase
+      .from('daily_metrics')
+      .upsert(payload, { onConflict: 'shop_id,product_id,date' })
+      .select()
+      .single());
+  }
   if (error) throw error;
   return mapDailyMetric(data);
 }
@@ -282,14 +300,44 @@ export async function upsertDailyPromotion(input: Partial<DailyPromotion> & { sh
     other_promo: Number(input.otherPromo) || 0,
     total,
     is_total_overridden: Boolean(input.isTotalOverridden),
+    data_source: input.dataSource || 'manual',
   };
 
-  const { data, error } = await supabase
-    .from('daily_promotion')
-    .upsert(payload, { onConflict: 'shop_id,product_id,date' })
-    .select()
-    .single();
+  let data: any;
+  let error: any;
+  if (input.productId == null) {
+    const existing = await supabase
+      .from('daily_promotion')
+      .select('id')
+      .eq('shop_id', input.shopId)
+      .is('product_id', null)
+      .eq('date', input.date)
+      .maybeSingle();
+    if (existing.error) throw existing.error;
+    if (existing.data?.id) {
+      ({ data, error } = await supabase.from('daily_promotion').update(payload).eq('id', existing.data.id).select().single());
+    } else {
+      ({ data, error } = await supabase.from('daily_promotion').insert(payload).select().single());
+    }
+  } else {
+    ({ data, error } = await supabase
+      .from('daily_promotion')
+      .upsert(payload, { onConflict: 'shop_id,product_id,date' })
+      .select()
+      .single());
+  }
   if (error) throw error;
+  let metricQuery = supabase
+    .from('daily_metrics')
+    .update({ promotion_cost: total })
+    .eq('shop_id', input.shopId)
+    .eq('date', input.date)
+    .eq('user_id', user.id);
+  metricQuery = input.productId == null
+    ? metricQuery.is('product_id', null)
+    : metricQuery.eq('product_id', input.productId);
+  const metricSync = await metricQuery;
+  if (metricSync.error) throw metricSync.error;
   return mapDailyPromotion(data);
 }
 
@@ -306,29 +354,13 @@ export async function upsertDailyPromotions(inputs: Array<Partial<DailyPromotion
   } = await supabase.auth.getUser();
   if (!user) throw new Error('未登录');
 
-  const payloads = inputs.map((input) => {
-    const total = calculatePromoTotal(input);
-    return {
-      user_id: user.id,
-      shop_id: input.shopId,
-      product_id: input.productId || null,
-      date: input.date,
-      product_site_promo: Number(input.productSitePromo) || 0,
-      keyword_promo: Number(input.keywordPromo) || 0,
-      audience_promo: Number(input.audiencePromo) || 0,
-      store_direct: Number(input.storeDirect) || 0,
-      content_marketing: Number(input.contentMarketing) || 0,
-      taobao_ke: Number(input.taobaoKe) || 0,
-      other_promo: Number(input.otherPromo) || 0,
-      total,
-      is_total_overridden: Boolean(input.isTotalOverridden),
-    };
-  });
-
-  const { error } = await supabase
-    .from('daily_promotion')
-    .upsert(payloads, { onConflict: 'shop_id,product_id,date' });
-  if (error) throw error;
+  /*
+   * A nullable product_id cannot participate in a normal UNIQUE conflict in
+   * PostgreSQL. Reuse the single-row path so shop-level imports stay idempotent.
+   */
+  for (const input of inputs) {
+    await upsertDailyPromotion(input);
+  }
 }
 
 // ============= 月度成本 =============
@@ -346,7 +378,7 @@ export async function fetchMonthlyCosts(
   if (productId) q = q.eq('product_id', productId);
   else q = q.is('product_id', null);
 
-  const { data, error } = await q;
+  const { data, error } = await q.gte('year', startYear).lte('year', endYear);
   if (error) throw error;
 
   return (data || [])
@@ -465,7 +497,7 @@ export async function clearAllMockData(): Promise<{ metrics: number; promotions:
   // 删除所有 mock 数据（daily_metrics、daily_promotion 都按 user_id 过滤）
   const [mRes, pRes] = await Promise.all([
     supabase.from('daily_metrics').delete().eq('user_id', user.id).eq('data_source', 'mock'),
-    supabase.from('daily_promotion').delete().eq('user_id', user.id),
+    supabase.from('daily_promotion').delete().eq('user_id', user.id).eq('data_source', 'mock'),
   ]);
 
   if (mRes.error) throw mRes.error;
@@ -662,6 +694,7 @@ function mapDailyPromotion(d: any): DailyPromotion {
     otherPromo: Number(d.other_promo) || 0,
     total: Number(d.total) || 0,
     isTotalOverridden: Boolean(d.is_total_overridden),
+    dataSource: d.data_source || 'manual',
     createdAt: d.created_at,
     updatedAt: d.updated_at,
   };

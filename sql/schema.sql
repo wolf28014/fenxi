@@ -116,6 +116,7 @@ CREATE TABLE IF NOT EXISTS public.daily_promotion (
   other_promo NUMERIC(14,2) DEFAULT 0,           -- 其它
   total NUMERIC(14,2) DEFAULT 0,                 -- 合计（会同步到 daily_metrics.promotion_cost）
   is_total_overridden BOOLEAN DEFAULT FALSE,     -- 是否手动覆盖合计
+  data_source TEXT DEFAULT 'manual' CHECK (data_source IN ('manual', 'excel', 'api', 'mock')),
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(shop_id, product_id, date)
@@ -244,6 +245,21 @@ CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
+CREATE OR REPLACE FUNCTION public.prevent_entitlement_tampering()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+  IF auth.role() <> 'service_role' AND
+     (NEW.plan IS DISTINCT FROM OLD.plan OR NEW.plan_expires_at IS DISTINCT FROM OLD.plan_expires_at) THEN
+    RAISE EXCEPTION 'subscription state is server-owned';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS prevent_entitlement_tampering ON public.user_settings;
+CREATE TRIGGER prevent_entitlement_tampering
+  BEFORE UPDATE ON public.user_settings
+  FOR EACH ROW EXECUTE FUNCTION public.prevent_entitlement_tampering();
+
 -- ============= RLS 行级安全策略 =============
 
 -- user_settings
@@ -251,10 +267,11 @@ ALTER TABLE public.user_settings ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "用户可读自己设置" ON public.user_settings FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "用户可更新自己设置" ON public.user_settings FOR UPDATE USING (auth.uid() = user_id);
 CREATE POLICY "用户可插入自己设置" ON public.user_settings FOR INSERT WITH CHECK (auth.uid() = user_id);
+REVOKE UPDATE (plan, plan_expires_at) ON public.user_settings FROM anon, authenticated;
 
--- app_config（所有登录用户可读，但只能通过 service_role 写入）
+-- app_config is service-role only; the browser uses the ai-proxy Edge Function.
 ALTER TABLE public.app_config ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "登录用户可读配置" ON public.app_config FOR SELECT TO authenticated USING (true);
+REVOKE ALL ON public.app_config FROM anon, authenticated;
 
 -- shops
 ALTER TABLE public.shops ENABLE ROW LEVEL SECURITY;
@@ -264,22 +281,22 @@ CREATE POLICY "用户可管理自己店铺" ON public.shops FOR ALL USING (auth.
 -- products
 ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "用户可读自己产品" ON public.products FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "用户可管理自己产品" ON public.products FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "用户可管理自己产品" ON public.products FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id AND EXISTS (SELECT 1 FROM public.shops s WHERE s.id = shop_id AND s.user_id = auth.uid()));
 
 -- daily_metrics
 ALTER TABLE public.daily_metrics ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "用户可读自己数据" ON public.daily_metrics FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "用户可管理自己数据" ON public.daily_metrics FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "用户可管理自己数据" ON public.daily_metrics FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id AND EXISTS (SELECT 1 FROM public.shops s WHERE s.id = shop_id AND s.user_id = auth.uid()) AND (product_id IS NULL OR EXISTS (SELECT 1 FROM public.products p WHERE p.id = product_id AND p.user_id = auth.uid() AND p.shop_id = shop_id)));
 
 -- daily_promotion
 ALTER TABLE public.daily_promotion ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "用户可读自己推广" ON public.daily_promotion FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "用户可管理自己推广" ON public.daily_promotion FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "用户可管理自己推广" ON public.daily_promotion FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id AND EXISTS (SELECT 1 FROM public.shops s WHERE s.id = shop_id AND s.user_id = auth.uid()) AND (product_id IS NULL OR EXISTS (SELECT 1 FROM public.products p WHERE p.id = product_id AND p.user_id = auth.uid() AND p.shop_id = shop_id)));
 
 -- monthly_cost
 ALTER TABLE public.monthly_cost ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "用户可读自己成本" ON public.monthly_cost FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "用户可管理自己成本" ON public.monthly_cost FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "用户可管理自己成本" ON public.monthly_cost FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id AND EXISTS (SELECT 1 FROM public.shops s WHERE s.id = shop_id AND s.user_id = auth.uid()) AND (product_id IS NULL OR EXISTS (SELECT 1 FROM public.products p WHERE p.id = product_id AND p.user_id = auth.uid() AND p.shop_id = shop_id)));
 
 -- ai_chats
 ALTER TABLE public.ai_chats ENABLE ROW LEVEL SECURITY;
@@ -293,7 +310,7 @@ CREATE POLICY "用户可记录自己AI用量" ON public.ai_usage FOR INSERT WITH
 
 -- license_codes
 ALTER TABLE public.license_codes ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "用户可读未使用兑换码" ON public.license_codes FOR SELECT USING (used_by IS NULL OR used_by = auth.uid());
+REVOKE ALL ON public.license_codes FROM anon, authenticated;
 
 -- ============= Realtime 实时同步 =============
 ALTER PUBLICATION supabase_realtime ADD TABLE public.shops;
@@ -344,5 +361,9 @@ BEGIN
   RETURN jsonb_build_object('success', true, 'plan', v_plan, 'expires_at', v_expires);
 END;
 $$;
+
+ALTER FUNCTION public.redeem_license_code(TEXT) SET search_path = public, auth, pg_temp;
+REVOKE EXECUTE ON FUNCTION public.redeem_license_code(TEXT) FROM anon;
+GRANT EXECUTE ON FUNCTION public.redeem_license_code(TEXT) TO authenticated;
 
 -- ============= 完毕 =============

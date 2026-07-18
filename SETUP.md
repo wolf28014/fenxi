@@ -16,7 +16,7 @@
 2. 选择项目 `kptggyteoejqrwzwzomx`
 3. 左侧菜单点击 **SQL Editor**
 4. 点击 **New query**
-5. 打开本仓库的 `sql/schema.sql` 文件，复制全部内容粘贴到 SQL Editor
+5. 按顺序执行 `sql/schema.sql`、`sql/migration-v2.sql`、`sql/migration-v3.sql`、`sql/migration-v4.sql` 和 `sql/migration-v5-security.sql`
 6. 点击 **Run**（运行）
 7. 看到成功提示即可
 
@@ -104,7 +104,7 @@ git push origin v1.0.0
 
 ## 🔧 后续可调整
 
-- 修改 Supabase 项目：编辑 `src/lib/supabase.ts`
+- 修改 Supabase 项目：配置 `.env.local` 中的 `VITE_SUPABASE_URL` 和 `VITE_SUPABASE_ANON_KEY`
 - 修改 AI 模型：在 App 设置 → AI 配置中切换
 - 配置淘宝开放平台 API：在 App 设置 → 淘宝 API 中填入 AppKey/AppSecret
 - 升级 Pro 会员：在 App 设置 → Pro 会员中输入兑换码（需先在 Supabase 的 `license_codes` 表插入兑换码）
@@ -123,4 +123,4 @@ A: 检查设置 → AI 配置中的 API Key 是否正确
 A: Mock 数据是基于当天的，请确认你的浏览器时间正常
 
 **Q: 想要内置 Pro Key**
-A: 在 Supabase 控制台 → Table Editor → `app_config` 表 → 修改 `ai_api_key` 字段为你自己的 Key
+A: 按 `SUPABASE_DEPLOY.md` 部署 `ai-proxy`，再在 Supabase 控制台的 `app_config.ai_api_key` 中配置服务端 Key。不要把该 Key 放进前端配置。

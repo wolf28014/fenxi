@@ -33,7 +33,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
       - name: Build Web
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
         run: npm run build
 
       - name: Install Capacitor
@@ -51,16 +57,16 @@ jobs:
         run: ./gradlew assembleRelease
 
       - name: Sign APK
-        if: env.SIGNING_KEY != ''
+        if: ${{ secrets.SIGNING_KEY != '' }}
         env:
           SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
           ALIAS: ${{ secrets.ALIAS }}
           KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          echo "$SIGNING_KEY" | base64 -d > app/release.keystore
+          echo "$SIGNING_KEY" | base64 -d > android/app/release.keystore
           cp android/app/build/outputs/apk/release/app-release-unsigned.apk app-release-signed.apk
-          jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 -keystore app/release.keystore -storepass "$KEY_STORE_PASSWORD" -keypass "$KEY_PASSWORD" app-release-signed.apk "$ALIAS"
+          jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 -keystore android/app/release.keystore -storepass "$KEY_STORE_PASSWORD" -keypass "$KEY_PASSWORD" app-release-signed.apk "$ALIAS"
           ${ANDROID_HOME}/build-tools/34.0.0/zipalign -v 4 app-release-signed.apk app-release-final.apk
 
       - name: Upload APK to Release
@@ -79,3 +85,4 @@ jobs:
           path: |
             app-release-final.apk
             android/app/build/outputs/apk/release/app-release-unsigned.apk
+          if-no-files-found: error

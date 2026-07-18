@@ -25,6 +25,7 @@ import {
   formatNumber,
   formatPercent,
   formatRatio,
+  formatLocalDate,
   getNaturalYearRange,
   getSeasonalYearRange,
   getLastYearSameRange,
@@ -47,8 +48,8 @@ export default function DetailView({ currentShop, shops }: Props) {
   const [selectedProduct, setSelectedProduct] = useState<string>('');
   const [yearType, setYearType] = useState<YearType>('natural');
   const [rangeType, setRangeType] = useState<QuickRangeType>('thisNaturalYear');
-  const [customStart, setCustomStart] = useState(new Date().toISOString().slice(0, 10));
-  const [customEnd, setCustomEnd] = useState(new Date().toISOString().slice(0, 10));
+  const [customStart, setCustomStart] = useState(formatLocalDate(new Date()));
+  const [customEnd, setCustomEnd] = useState(formatLocalDate(new Date()));
   const [metrics, setMetrics] = useState<DailyMetric[]>([]);
   const [costs, setCosts] = useState<MonthlyCost[]>([]);
   const [loading, setLoading] = useState(false);
@@ -64,7 +65,7 @@ export default function DetailView({ currentShop, shops }: Props) {
       const now = new Date();
       return {
         start: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`,
-        end: now.toISOString().slice(0, 10),
+        end: formatLocalDate(now),
       };
     }
     if (rangeType === 'lastMonth') {
@@ -73,18 +74,18 @@ export default function DetailView({ currentShop, shops }: Props) {
       const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
       return {
         start: `${lastMonth.getFullYear()}-${String(lastMonth.getMonth() + 1).padStart(2, '0')}-01`,
-        end: lastMonthEnd.toISOString().slice(0, 10),
+        end: formatLocalDate(lastMonthEnd),
       };
     }
     if (rangeType === 'last30Days') {
       const now = new Date();
       const d = new Date(now.getTime() - 30 * 86400000);
-      return { start: d.toISOString().slice(0, 10), end: now.toISOString().slice(0, 10) };
+      return { start: formatLocalDate(d), end: formatLocalDate(now) };
     }
     if (rangeType === 'last90Days') {
       const now = new Date();
       const d = new Date(now.getTime() - 90 * 86400000);
-      return { start: d.toISOString().slice(0, 10), end: now.toISOString().slice(0, 10) };
+      return { start: formatLocalDate(d), end: formatLocalDate(now) };
     }
     if (rangeType === 'thisNaturalYear') return getNaturalYearRange();
     if (rangeType === 'thisSeasonalYear') return getSeasonalYearRange();
@@ -378,7 +379,7 @@ export default function DetailView({ currentShop, shops }: Props) {
           shopId={activeShop.id}
           shop={activeShop}
           productId={selectedProduct || null}
-          defaultDate={new Date().toISOString().slice(0, 10)}
+          defaultDate={formatLocalDate(new Date())}
           onClose={() => setEditingMetric(null)}
           onSaved={() => { setEditingMetric(null); loadData(); }}
         />

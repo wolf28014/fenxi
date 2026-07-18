@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { supabase, SUPABASE_ANON_KEY, SUPABASE_URL } from './supabase';
 import { getCurrentUser, isProUser } from './auth';
 import type { AIConfig, MetricsSummary, DailyMetric, DailyPromotion, MonthlyCost, Shop, Product } from '@/types';
 import { PLATFORM_LABELS, PROMOTION_FIELDS, COST_FIELDS } from '@/types';
@@ -9,13 +9,9 @@ const STORAGE_KEY = 'ecom_ai_config';
 
 export function getUserAIConfig(): AIConfig | null {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = sessionStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const cfg = JSON.parse(raw);
-    // 简单的 XOR 混淆解码
-    if (cfg._x) {
-      cfg.apiKey = xorDecode(cfg._x, 'ecom-key');
-    }
     return cfg;
   } catch {
     return null;
@@ -23,50 +19,21 @@ export function getUserAIConfig(): AIConfig | null {
 }
 
 export function setUserAIConfig(cfg: AIConfig) {
-  const toStore = { ...cfg, _x: xorEncode(cfg.apiKey, 'ecom-key') } as any;
-  delete toStore.apiKey;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(toStore));
+  // Session storage limits persistence of user-supplied credentials. It is not
+  // a security boundary; production keys should use the server-side proxy.
+  sessionStorage.setItem(STORAGE_KEY, JSON.stringify(cfg));
 }
 
 // Pro 用户从云端拉取配置
 export async function getProAIConfig(): Promise<AIConfig | null> {
   const user = getCurrentUser();
   if (!isProUser(user)) return null;
-
-  const { data, error } = await supabase.from('app_config').select('*').eq('id', 1).single();
-  if (error || !data || !data.ai_api_key) return null;
-
   return {
-    provider: data.ai_provider || 'zhipu',
-    baseUrl: data.ai_base_url,
-    model: data.ai_model,
-    apiKey: data.ai_api_key,
+    provider: 'proxy',
+    baseUrl: `${SUPABASE_URL}/functions/v1/ai-proxy`,
+    model: '',
+    apiKey: '',
   };
-}
-
-// ============= XOR 编码（混淆，非真正加密） =============
-
-function xorEncode(text: string, key: string): string {
-  if (!text) return '';
-  let result = '';
-  for (let i = 0; i < text.length; i++) {
-    result += String.fromCharCode(text.charCodeAt(i) ^ key.charCodeAt(i % key.length));
-  }
-  return btoa(unescape(encodeURIComponent(result)));
-}
-
-function xorDecode(encoded: string, key: string): string {
-  if (!encoded) return '';
-  try {
-    const text = decodeURIComponent(escape(atob(encoded)));
-    let result = '';
-    for (let i = 0; i < text.length; i++) {
-      result += String.fromCharCode(text.charCodeAt(i) ^ key.charCodeAt(i % key.length));
-    }
-    return result;
-  } catch {
-    return '';
-  }
 }
 
 // ============= AI 调用核心 =============
@@ -87,6 +54,27 @@ export async function chatCompletion(
 ): Promise<string> {
   const config = options.config || (await resolveConfig());
   if (!config) throw new Error('未配置 AI，请先在设置中填写 API Key');
+
+  if (config.provider === 'proxy') {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+    if (!accessToken) throw new Error('登录状态已失效，请重新登录');
+    const response = await fetch(config.baseUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ messages, stream: false }),
+      signal: options.signal,
+    });
+    if (!response.ok) throw new Error(`AI 请求失败 (${response.status})`);
+    const json = await response.json();
+    const content = json.choices?.[0]?.message?.content || '';
+    options.onToken?.(content);
+    return content;
+  }
 
   const url = `${config.baseUrl.replace(/\/$/, '')}/chat/completions`;
 

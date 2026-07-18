@@ -291,6 +291,11 @@ export function getNaturalYearRange(date: Date = new Date()): { start: string; e
   };
 }
 
+/** Format a Date in the user's local business timezone, not UTC. */
+export function formatLocalDate(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
 // 季节年起止（7月1日-次年6月30日）
 export function getSeasonalYearRange(date: Date = new Date()): { start: string; end: string } {
   const year = date.getFullYear();
@@ -321,8 +326,10 @@ export function getLastYearSameRange(start: string, end: string): { start: strin
 // 快捷日期范围
 export function getQuickRange(type: string): { start: string; end: string } {
   const now = new Date();
-  const today = now.toISOString().slice(0, 10);
-  const yesterday = new Date(now.getTime() - 86400000).toISOString().slice(0, 10);
+  const today = formatLocalDate(now);
+  const yesterdayDate = new Date(now);
+  yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+  const yesterday = formatLocalDate(yesterdayDate);
 
   switch (type) {
     case 'today':
@@ -333,7 +340,7 @@ export function getQuickRange(type: string): { start: string; end: string } {
       const day = now.getDay() || 7;
       const monday = new Date(now);
       monday.setDate(now.getDate() - day + 1);
-      return { start: monday.toISOString().slice(0, 10), end: today };
+      return { start: formatLocalDate(monday), end: today };
     }
     case 'lastWeek': {
       const day = now.getDay() || 7;
@@ -341,7 +348,7 @@ export function getQuickRange(type: string): { start: string; end: string } {
       lastMonday.setDate(now.getDate() - day - 6);
       const lastSunday = new Date(lastMonday);
       lastSunday.setDate(lastMonday.getDate() + 6);
-      return { start: lastMonday.toISOString().slice(0, 10), end: lastSunday.toISOString().slice(0, 10) };
+      return { start: formatLocalDate(lastMonday), end: formatLocalDate(lastSunday) };
     }
     case 'thisMonth':
       return { start: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`, end: today };
@@ -350,7 +357,7 @@ export function getQuickRange(type: string): { start: string; end: string } {
       const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
       return {
         start: `${lastMonth.getFullYear()}-${String(lastMonth.getMonth() + 1).padStart(2, '0')}-01`,
-        end: lastMonthEnd.toISOString().slice(0, 10),
+        end: formatLocalDate(lastMonthEnd),
       };
     }
     case 'thisNaturalYear':
@@ -368,12 +375,14 @@ export function getQuickRange(type: string): { start: string; end: string } {
       return { start: `${y}-07-01`, end: `${y + 1}-06-30` };
     }
     case 'last30Days': {
-      const d = new Date(now.getTime() - 30 * 86400000);
-      return { start: d.toISOString().slice(0, 10), end: today };
+      const d = new Date(now);
+      d.setDate(d.getDate() - 30);
+      return { start: formatLocalDate(d), end: today };
     }
     case 'last90Days': {
-      const d = new Date(now.getTime() - 90 * 86400000);
-      return { start: d.toISOString().slice(0, 10), end: today };
+      const d = new Date(now);
+      d.setDate(d.getDate() - 90);
+      return { start: formatLocalDate(d), end: today };
     }
     default:
       return { start: today, end: today };
@@ -489,6 +498,6 @@ export function getLastMonthRange(date: Date = new Date()): { start: string; end
   const lastMonthEnd = new Date(date.getFullYear(), date.getMonth(), 0);
   return {
     start: `${lastMonth.getFullYear()}-${String(lastMonth.getMonth() + 1).padStart(2, '0')}-01`,
-    end: lastMonthEnd.toISOString().slice(0, 10),
+    end: formatLocalDate(lastMonthEnd),
   };
 }

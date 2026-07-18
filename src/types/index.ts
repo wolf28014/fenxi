@@ -82,6 +82,7 @@ export interface DailyPromotion {
   otherPromo: number;
   total: number;
   isTotalOverridden: boolean;
+  dataSource: DataSource;
   createdAt: string;
   updatedAt: string;
 }
@@ -212,7 +213,7 @@ export interface AIChatMessage {
 }
 
 export interface AIConfig {
-  provider: 'zhipu' | 'openai' | 'deepseek' | 'moonshot' | 'custom';
+  provider: 'zhipu' | 'openai' | 'deepseek' | 'moonshot' | 'custom' | 'proxy';
   baseUrl: string;
   model: string;
   apiKey: string;

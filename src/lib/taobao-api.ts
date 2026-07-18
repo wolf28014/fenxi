@@ -1,5 +1,6 @@
 import type { DailyMetric, DailyPromotion, Shop } from '@/types';
 import { upsertDailyMetric, upsertDailyPromotion } from './db';
+import { formatLocalDate } from './calc';
 
 // ============= 淘宝开放平台 API 对接 =============
 // 本期采用 Mock 数据演示，预留真实对接位置
@@ -18,7 +19,7 @@ const STORAGE_KEY = 'ecom_taobao_api_config';
 
 export function getTaobaoConfig(): TaobaoApiConfig | null {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = sessionStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     return JSON.parse(raw);
   } catch {
@@ -27,11 +28,11 @@ export function getTaobaoConfig(): TaobaoApiConfig | null {
 }
 
 export function setTaobaoConfig(config: TaobaoApiConfig) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+  sessionStorage.setItem(STORAGE_KEY, JSON.stringify(config));
 }
 
 export function clearTaobaoConfig() {
-  localStorage.removeItem(STORAGE_KEY);
+  sessionStorage.removeItem(STORAGE_KEY);
 }
 
 // ============= 同步状态 =============
@@ -48,7 +49,7 @@ const SYNC_STATUS_KEY = 'ecom_sync_status';
 
 export function getSyncStatus(shopId: string): SyncStatus | null {
   try {
-    const raw = localStorage.getItem(SYNC_STATUS_KEY);
+    const raw = sessionStorage.getItem(SYNC_STATUS_KEY);
     if (!raw) return null;
     const all = JSON.parse(raw);
     return all[shopId] || null;
@@ -59,10 +60,10 @@ export function getSyncStatus(shopId: string): SyncStatus | null {
 
 export function setSyncStatus(shopId: string, status: Partial<SyncStatus>) {
   try {
-    const raw = localStorage.getItem(SYNC_STATUS_KEY);
+    const raw = sessionStorage.getItem(SYNC_STATUS_KEY);
     const all = raw ? JSON.parse(raw) : {};
     all[shopId] = { ...all[shopId], ...status, shopId };
-    localStorage.setItem(SYNC_STATUS_KEY, JSON.stringify(all));
+    sessionStorage.setItem(SYNC_STATUS_KEY, JSON.stringify(all));
   } catch {}
 }
 
@@ -114,6 +115,10 @@ export async function syncShopData(
   const days = options.days || 7;
   const isMock = !config?.appKey || !config?.appSecret || !config?.accessToken;
 
+  if (!isMock) {
+    throw new Error('淘宝真实 API 尚未启用，请清除凭据后使用 Mock 同步');
+  }
+
   setSyncStatus(shop.id, {
     lastSyncAt: new Date().toISOString(),
     lastSyncError: null,
@@ -125,7 +130,9 @@ export async function syncShopData(
     let count = 0;
 
     for (let i = 0; i < days; i++) {
-      const date = new Date(today.getTime() - i * 86400000).toISOString().slice(0, 10);
+      const dateValue = new Date(today);
+      dateValue.setDate(dateValue.getDate() - i);
+      const date = formatLocalDate(dateValue);
 
       // 真实 API 调用位置（预留）
       // if (!isMock) {
@@ -140,7 +147,7 @@ export async function syncShopData(
       await upsertDailyMetric({ ...mockMetric, shopId: shop.id, productId: null, date } as any);
 
       const mockPromo = generateMockPromotion(date);
-      await upsertDailyPromotion({ ...mockPromo, shopId: shop.id, productId: null, date } as any);
+      await upsertDailyPromotion({ ...mockPromo, shopId: shop.id, productId: null, date, dataSource: 'mock' } as any);
 
       count++;
       options.onProgress?.(i + 1, days);

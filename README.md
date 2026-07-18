@@ -78,6 +78,10 @@
 # 安装依赖
 npm install
 
+# 配置 Supabase（复制 .env.example 为 .env.local 后填写）
+# VITE_SUPABASE_URL=...
+# VITE_SUPABASE_ANON_KEY=...
+
 # 启动开发服务器
 npm run dev
 
@@ -110,11 +114,11 @@ git push origin v1.0.0
 ### Supabase 配置
 1. 在 Supabase 控制台创建新项目
 2. 在 SQL Editor 中执行 `sql/schema.sql`
-3. 在 `src/lib/supabase.ts` 中替换 URL 和 anon key
+3. 复制 `.env.example` 为 `.env.local`，填写 `VITE_SUPABASE_URL` 和 `VITE_SUPABASE_ANON_KEY`
 
 ### AI 配置
 - 普通用户：在 App 设置中填写自己的 API Key
-- Pro 会员：使用内置云端 Key（通过 `app_config` 表配置）
+- Pro 会员：通过 Supabase Edge Function 使用云端 Key，浏览器不会读取 Key
 - 推荐使用智谱 GLM-4-Flash（免费）：https://open.bigmodel.cn/
 
 ### 淘宝 API 配置

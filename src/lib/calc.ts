@@ -141,6 +141,7 @@ export interface DailyMetricWithCalc {
 export function calculateDailyRows(
   metrics: DailyMetric[],
   shopNameMap?: Record<string, string>,
+  shopCostRate = 0,
 ): DailyMetricWithCalc[] {
   // 按日期排序
   const sorted = [...metrics].sort((a, b) => a.date.localeCompare(b.date));
@@ -166,7 +167,7 @@ export function calculateDailyRows(
     const refundRate = sales > 0 ? (refund / sales) * 100 : 0;
     const promoRate = sales > 0 ? (promo / sales) * 100 : 0;
     const dailyROI = promo > 0 ? sales / promo : 0;
-    const breakEvenROI = netSales > 0 ? 1 : null;
+    const breakEvenROI = netSales > 0 && shopCostRate > 0 && shopCostRate < 100 ? 1 / (1 - shopCostRate / 100) : null;
     const cumRefundRate = cumSales > 0 ? (cumRefund / cumSales) * 100 : 0;
     const cumPromoRate = cumSales > 0 ? (cumPromoCost / cumSales) * 100 : 0;
     const cumNetPromoRate = cumNetSales > 0 ? (cumPromoCost / cumNetSales) * 100 : 0;
@@ -213,6 +214,7 @@ export interface MonthlyMetricWithCalc {
   refundRate: number;
   promoRate: number;
   monthlyROI: number;
+  breakEvenROI: number | null;
   cumSales: number;
   cumRefund: number;
   cumRefundRate: number; // 累积退款率
@@ -224,7 +226,7 @@ export interface MonthlyMetricWithCalc {
   cumROI: number; // 累积投产比 = 累积销售 / 累积推广费
 }
 
-export function calculateMonthlyRows(metrics: DailyMetric[]): MonthlyMetricWithCalc[] {
+export function calculateMonthlyRows(metrics: DailyMetric[], shopCostRate = 0): MonthlyMetricWithCalc[] {
   // 按月份聚合
   const byMonth: Record<string, DailyMetric[]> = {};
   for (const m of metrics) {
@@ -256,6 +258,7 @@ export function calculateMonthlyRows(metrics: DailyMetric[]): MonthlyMetricWithC
     const refundRate = sales > 0 ? (refund / sales) * 100 : 0;
     const promoRate = sales > 0 ? (promo / sales) * 100 : 0;
     const monthlyROI = promo > 0 ? sales / promo : 0;
+    const breakEvenROI = netSales > 0 && shopCostRate > 0 && shopCostRate < 100 ? 1 / (1 - shopCostRate / 100) : null;
     const cumRefundRate = cumSales > 0 ? (cumRefund / cumSales) * 100 : 0;
     const cumPromoRate = cumSales > 0 ? (cumPromoCost / cumSales) * 100 : 0;
     const cumNetPromoRate = cumNetSales > 0 ? (cumPromoCost / cumNetSales) * 100 : 0;
@@ -273,6 +276,7 @@ export function calculateMonthlyRows(metrics: DailyMetric[]): MonthlyMetricWithC
       refundRate,
       promoRate,
       monthlyROI,
+      breakEvenROI,
       cumSales,
       cumRefund,
       cumRefundRate,

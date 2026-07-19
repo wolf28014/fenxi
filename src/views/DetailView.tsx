@@ -166,8 +166,9 @@ export default function DetailView({ currentShop, shops }: Props) {
   };
 
   // 计算
-  const dailyRows = useMemo(() => calculateDailyRows(metrics), [metrics]);
-  const monthlyRows = useMemo(() => calculateMonthlyRows(metrics), [metrics]);
+  const detailCostRate = currentShop?.defaultCostRate || 0;
+  const dailyRows = useMemo(() => calculateDailyRows(metrics, undefined, detailCostRate), [metrics, detailCostRate]);
+  const monthlyRows = useMemo(() => calculateMonthlyRows(metrics, detailCostRate), [metrics, detailCostRate]);
 
   // 店铺名映射
   const shopNameMap = useMemo(() => {
@@ -415,6 +416,7 @@ type DisplayColumn = ColumnOption & {
 };
 
 function formatTableValue(column: DisplayColumn, value: number | string): string {
+  if (column.key === 'breakEvenROI' && (value === null || value === undefined || Number(value) <= 0)) return '未配置';
   if (column.type === 'currency') return formatCurrency(Number(value));
   if (column.type === 'number') return formatNumber(Number(value));
   if (column.type === 'percent') return formatPercent(Number(value));
@@ -514,7 +516,7 @@ function DailySalesTable({ rows, shopNameMap, showShop, onEdit, onDelete, onBatc
     refundRate: summaryRefundRate,
     promoRate: summaryPromoRate,
     dailyROI: summaryROI,
-    breakEvenROI: summary.netSales > 0 ? 1 : null,
+    breakEvenROI: last.breakEvenROI,
     cumSales: last.cumSales,
     cumRefund: last.cumRefund,
     cumRefundRate: last.cumRefundRate,
@@ -687,7 +689,7 @@ function MonthlySalesTable({ rows, onEdit, onDelete }: { rows: any[]; onEdit: (i
     refundRate: summaryRefundRate,
     promoRate: summaryPromoRate,
     monthlyROI: summaryROI,
-    breakEvenROI: summary.netSales > 0 ? 1 : null,
+    breakEvenROI: last.breakEvenROI,
     cumSales: last.cumSales,
     cumRefund: last.cumRefund,
     cumRefundRate: last.cumRefundRate,

@@ -77,8 +77,10 @@ export function calculateMetrics(
   // 利润 = 净销售额 - 总成本 - 推广费
   const profit = netSales - totalCost - promoTotal;
   const profitRate = netSales > 0 ? (profit / netSales) * 100 : 0;
-  const prePromoProfit = totalSales - totalCost;
-  const prePromoProfitRate = totalSales > 0 ? (prePromoProfit / totalSales) * 100 : 0;
+  // 保本投产比沿用页面毛利率口径：净销售额扣除货品成本，不扣推广费和期间费用。
+  const productOnlyCost = recordedProductCost + autoProductCost;
+  const prePromoProfit = netSales - productOnlyCost;
+  const prePromoProfitRate = netSales > 0 ? (prePromoProfit / netSales) * 100 : 0;
   const breakEvenROI = calculateBreakEvenROI(prePromoProfitRate, refundRate);
 
   return {

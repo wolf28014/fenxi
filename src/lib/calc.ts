@@ -18,6 +18,22 @@ export function calculateCostTotal(c: Partial<MonthlyCost>): number {
   return COST_FIELDS.reduce((sum, f) => sum + (Number(c[f.key as keyof MonthlyCost]) || 0), 0);
 }
 
+export function calculateProratedOtherCosts(costs: MonthlyCost[], start?: string, end?: string): number {
+  if (!start || !end) return sum(costs.map((c) => COST_FIELDS.filter((f) => f.key !== 'productCost').reduce((total, f) => total + (Number(c[f.key as keyof MonthlyCost]) || 0), 0)));
+  const rangeStart = new Date(`${start}T00:00:00`);
+  const rangeEnd = new Date(`${end}T00:00:00`);
+  return sum(costs.map((c) => {
+    const monthStart = new Date(c.year, c.month - 1, 1);
+    const monthEnd = new Date(c.year, c.month, 0);
+    const overlapStart = Math.max(rangeStart.getTime(), monthStart.getTime());
+    const overlapEnd = Math.min(rangeEnd.getTime(), monthEnd.getTime());
+    if (overlapStart > overlapEnd) return 0;
+    const overlapDays = Math.round((overlapEnd - overlapStart) / 86400000) + 1;
+    const monthlyOtherCost = COST_FIELDS.filter((f) => f.key !== 'productCost').reduce((total, f) => total + (Number(c[f.key as keyof MonthlyCost]) || 0), 0);
+    return monthlyOtherCost * overlapDays / monthEnd.getDate();
+  }));
+}
+
 // ============= 计算指标汇总 =============
 // shopCostRate: 店铺默认货品成本百分比（0-100），用于实时计算货品成本
 export function calculateMetrics(
@@ -26,6 +42,7 @@ export function calculateMetrics(
   costs: MonthlyCost[],
   lastYearMetrics?: DailyMetric[],
   shopCostRate?: number,
+  dateRange?: { start: string; end: string },
 ): MetricsSummary {
   const totalSales = sum(metrics.map((m) => Number(m.salesAmount) || 0));
   const totalRefund = sum(metrics.map((m) => Number(m.refundAmount) || 0));
@@ -35,9 +52,11 @@ export function calculateMetrics(
   const totalVisitors = sum(metrics.map((m) => Number(m.visitorCount) || 0));
 
   // 推广费：优先用 daily_metrics.promotion_cost；仅当 metrics 为空时才回退到 daily_promotion.total
-  const promoTotal = metrics.length > 0
-    ? sum(metrics.map((m) => Number(m.promotionCost) || 0))
-    : sum(promotions.map((p) => Number(p.total) || 0));
+  const metricPromoTotal = sum(metrics.map((m) => Number(m.promotionCost) || 0));
+  const promotionDetailTotal = sum(promotions.map((p) => Number(p.total) || 0));
+  const promoTotal = metricPromoTotal > 0 || promotionDetailTotal === 0
+    ? metricPromoTotal
+    : promotionDetailTotal;
   const promoRate = totalSales > 0 ? (promoTotal / totalSales) * 100 : 0;
 
   // 累积指标（与当期相同，因为这里 metrics 已经是累积范围）
@@ -69,9 +88,7 @@ export function calculateMetrics(
   const recordedProductCost = 0; // 不再从 monthly_cost 取货品成本
 
   // 其他成本 = monthly_cost 表中除货品成本外的所有成本
-  const otherCosts = sum(costs.map((c) => {
-    return COST_FIELDS.filter(f => f.key !== 'productCost').reduce((s, f) => s + (Number(c[f.key as keyof MonthlyCost]) || 0), 0);
-  }));
+  const otherCosts = calculateProratedOtherCosts(costs, dateRange?.start, dateRange?.end);
   const totalCost = autoProductCost + otherCosts;
 
   // 利润 = 净销售额 - 总成本 - 推广费

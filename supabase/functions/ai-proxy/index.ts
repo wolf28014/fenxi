@@ -6,6 +6,14 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
+const quotaKeys = {
+  chat: 'ai_quota_chat',
+  insight: 'ai_quota_insight',
+  suggestion: 'ai_quota_suggestion',
+  forecast: 'ai_quota_forecast',
+  report: 'ai_quota_report',
+} as const;
+
 type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: string };
 
 Deno.serve(async (request) => {
@@ -40,10 +48,10 @@ Deno.serve(async (request) => {
     return json({ error: 'Invalid messages' }, 400);
   }
 
-  const feature = body?.feature || 'chat';
+  const feature = body?.feature && body.feature in quotaKeys ? body.feature as keyof typeof quotaKeys : 'chat';
   const { data: config, error: configError } = await admin
     .from('app_config')
-    .select('ai_base_url, ai_model, ai_api_key, ai_quota_chat')
+    .select('ai_base_url, ai_model, ai_api_key, ai_quota_chat, ai_quota_insight, ai_quota_suggestion, ai_quota_forecast, ai_quota_report')
     .eq('id', 1)
     .single();
   if (configError || !config?.ai_api_key || !config.ai_base_url || !config.ai_model) {
@@ -57,7 +65,9 @@ Deno.serve(async (request) => {
     .eq('user_id', authData.user.id)
     .eq('feature', feature)
     .gte('created_at', since);
-  if ((count || 0) >= (config.ai_quota_chat || 30)) return json({ error: 'AI quota exceeded' }, 429);
+  const quotaKey = quotaKeys[feature];
+  const quota = Number(config[quotaKey] ?? 30);
+  if ((count || 0) >= quota) return json({ error: 'AI quota exceeded' }, 429);
 
   const providerResponse = await fetch(`${config.ai_base_url.replace(/\/$/, '')}/chat/completions`, {
     method: 'POST',

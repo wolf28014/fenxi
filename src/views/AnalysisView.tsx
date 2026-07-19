@@ -116,8 +116,8 @@ export default function AnalysisView({ currentShop, shops }: Props) {
   }, [currentShop, shops]);
 
   const summary: MetricsSummary = useMemo(() => {
-    return calculateMetrics(metrics, promotions, costs, lastYearMetrics, shopCostRate);
-  }, [metrics, promotions, costs, lastYearMetrics, shopCostRate]);
+    return calculateMetrics(metrics, promotions, costs, lastYearMetrics, shopCostRate, range);
+  }, [metrics, promotions, costs, lastYearMetrics, shopCostRate, range.start, range.end]);
 
   const handleAI = async (type: 'insight' | 'suggestion' | 'report' | 'forecast') => {
     setAiModal({ type, content: '', loading: true });
@@ -336,7 +336,7 @@ function OverviewTab({ summary, metrics, costs, lastMonthMetrics, shopCostRate }
     { label: '推广费用', value: formatCurrency(summary.promoTotal), sub: '用户录入', color: 'text-amber-600' },
     { label: '访客数', value: formatNumber(summary.totalVisitors), sub: '用户录入', color: 'text-purple-600' },
     { label: '订单量', value: formatNumber(summary.totalOrders), sub: '用户录入', color: 'text-slate-700 dark:text-slate-200' },
-    { label: '总成本', value: formatCurrency(summary.totalCost), sub: `货品${formatCurrency(summary.productCost)}+其他${formatCurrency(summary.otherCosts)}`, color: 'text-slate-600' },
+    { label: '总成本', value: formatCurrency(summary.totalCost), sub: `货品${formatCurrency(summary.productCost)}+其他${formatCurrency(summary.otherCosts)}（按区间摊销）`, color: 'text-slate-600' },
   ];
 
   // 计算数据（系统自动算出）

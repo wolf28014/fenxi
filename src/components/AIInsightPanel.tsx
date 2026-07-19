@@ -38,7 +38,7 @@ export default function AIInsightPanel({ currentShop, shops, range, rangeLabel }
         // 获取店铺默认成本率
         const shop = currentShop || shops.find((s) => (s.defaultCostRate || 0) > 0);
         const rate = shop?.defaultCostRate || 0;
-        const s = calculateMetrics(m, [], c, undefined, rate);
+        const s = calculateMetrics(m, [], c, undefined, rate, range);
         setSummary(s);
 
         const list: Insight[] = [];

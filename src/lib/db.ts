@@ -211,29 +211,11 @@ export async function upsertDailyMetric(input: Partial<DailyMetric> & { shopId: 
     data_source: input.dataSource || 'manual',
   };
 
-  let data: any;
-  let error: any;
-  if (input.productId == null) {
-    const existing = await supabase
-      .from('daily_metrics')
-      .select('id')
-      .eq('shop_id', input.shopId)
-      .is('product_id', null)
-      .eq('date', input.date)
-      .maybeSingle();
-    if (existing.error) throw existing.error;
-    if (existing.data?.id) {
-      ({ data, error } = await supabase.from('daily_metrics').update(payload).eq('id', existing.data.id).select().single());
-    } else {
-      ({ data, error } = await supabase.from('daily_metrics').insert(payload).select().single());
-    }
-  } else {
-    ({ data, error } = await supabase
-      .from('daily_metrics')
-      .upsert(payload, { onConflict: 'shop_id,product_id,date' })
-      .select()
-      .single());
-  }
+  const { data, error } = await supabase
+    .from('daily_metrics')
+    .upsert(payload, { onConflict: 'shop_id,product_id,date' })
+    .select()
+    .single();
   if (error) throw error;
   return mapDailyMetric(data);
 }
@@ -320,41 +302,12 @@ export async function upsertDailyPromotion(input: Partial<DailyPromotion> & { sh
     data_source: input.dataSource || 'manual',
   };
 
-  let data: any;
-  let error: any;
-  if (input.productId == null) {
-    const existing = await supabase
-      .from('daily_promotion')
-      .select('id')
-      .eq('shop_id', input.shopId)
-      .is('product_id', null)
-      .eq('date', input.date)
-      .maybeSingle();
-    if (existing.error) throw existing.error;
-    if (existing.data?.id) {
-      ({ data, error } = await supabase.from('daily_promotion').update(payload).eq('id', existing.data.id).select().single());
-    } else {
-      ({ data, error } = await supabase.from('daily_promotion').insert(payload).select().single());
-    }
-  } else {
-    ({ data, error } = await supabase
-      .from('daily_promotion')
-      .upsert(payload, { onConflict: 'shop_id,product_id,date' })
-      .select()
-      .single());
-  }
+  const { data, error } = await supabase
+    .from('daily_promotion')
+    .upsert(payload, { onConflict: 'shop_id,product_id,date' })
+    .select()
+    .single();
   if (error) throw error;
-  let metricQuery = supabase
-    .from('daily_metrics')
-    .update({ promotion_cost: total })
-    .eq('shop_id', input.shopId)
-    .eq('date', input.date)
-    .eq('user_id', user.id);
-  metricQuery = input.productId == null
-    ? metricQuery.is('product_id', null)
-    : metricQuery.eq('product_id', input.productId);
-  const metricSync = await metricQuery;
-  if (metricSync.error) throw metricSync.error;
   return mapDailyPromotion(data);
 }
 

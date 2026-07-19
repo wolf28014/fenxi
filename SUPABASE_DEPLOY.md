@@ -1,6 +1,6 @@
 # Supabase deployment
 
-1. Run `sql/schema.sql`, then `sql/migration-v2.sql`, `sql/migration-v3.sql`, `sql/migration-v4.sql`, and `sql/migration-v5-security.sql` in order.
+1. For a new project, run `sql/schema.sql`, then every `sql/migration-v*.sql` file in numeric order through `sql/migration-v9-critical-data-fixes.sql`. For an existing project already on v8, run only `sql/migration-v9-critical-data-fixes.sql`.
 2. Deploy the Edge Function:
 
 ```bash

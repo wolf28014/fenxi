@@ -36,7 +36,7 @@ PostgreSQL `NULLS NOT DISTINCT` unique indexes will replace nullable uniqueness 
 - `daily_promotion(shop_id, product_id, date)`
 - `monthly_cost(shop_id, product_id, year, month)`
 
-Before creating the indexes, the migration will consolidate duplicate shop-level rows. The retained row will contain deterministic aggregate values and the duplicate rows will be removed.
+Before creating the indexes, the migration will consolidate duplicate shop-level rows by retaining the newest update and removing older duplicates. Summing duplicate rows would double-count concurrent writes.
 
 After the indexes exist, client writes will use atomic upsert for product-level and shop-level records. The select-then-insert branches will be removed.
 

@@ -47,6 +47,7 @@ export async function chatCompletion(
   messages: ChatMessage[],
   options: {
     config?: AIConfig;
+    feature?: 'chat' | 'insight' | 'suggestion' | 'forecast' | 'report';
     stream?: boolean;
     onToken?: (token: string) => void;
     signal?: AbortSignal;
@@ -66,7 +67,7 @@ export async function chatCompletion(
         apikey: SUPABASE_ANON_KEY,
         Authorization: `Bearer ${accessToken}`,
       },
-      body: JSON.stringify({ messages, stream: false }),
+      body: JSON.stringify({ messages, stream: false, feature: options.feature || 'chat' }),
       signal: options.signal,
     });
     if (!response.ok) throw new Error(`AI 请求失败 (${response.status})`);
@@ -235,7 +236,7 @@ ${context.dailyMetrics.slice(-30).map((m) => `- ${m.date}: 销售¥${m.salesAmou
     { role: 'user', content: question },
   ];
 
-  return chatCompletion(messages, { stream: true, onToken });
+  return chatCompletion(messages, { stream: true, onToken, feature: 'chat' });
 }
 
 // ============= AI 场景：智能洞察 =============
@@ -305,7 +306,7 @@ ${anomalies.length > 0 ? anomalies.join('\n') : '无明显异常'}
 
 格式为简洁的要点，每条不超过 50 字。`;
 
-  return chatCompletion([{ role: 'user', content: prompt }], {});
+  return chatCompletion([{ role: 'user', content: prompt }], { feature: 'insight' });
 }
 
 // ============= AI 场景：经营建议 =============
@@ -350,7 +351,7 @@ ${costByItem.map((c) => `- ${c.name}: ¥${c.total.toFixed(2)}`).join('\n') || '-
 
 按优先级排序，最重要的放第一条。`;
 
-  return chatCompletion([{ role: 'user', content: prompt }], {});
+  return chatCompletion([{ role: 'user', content: prompt }], { feature: 'suggestion' });
 }
 
 // ============= AI 场景：销售预测 =============
@@ -378,7 +379,7 @@ ${recent.map((m) => `${m.date}: 销售¥${m.salesAmount}, 订单${m.orderCount},
 
 请用结构化格式输出。`;
 
-  return chatCompletion([{ role: 'user', content: prompt }], {});
+  return chatCompletion([{ role: 'user', content: prompt }], { feature: 'forecast' });
 }
 
 // ============= AI 场景：报表解读 =============
@@ -424,5 +425,5 @@ export async function generateReport(
 
 报告语言为中文，专业但易懂。`;
 
-  return chatCompletion([{ role: 'user', content: prompt }], {});
+  return chatCompletion([{ role: 'user', content: prompt }], { feature: 'report' });
 }

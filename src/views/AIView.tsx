@@ -26,11 +26,12 @@ export default function AIView({ currentShop, shops }: Props) {
   const [promotions, setPromotions] = useState<DailyPromotion[]>([]);
   const [costs, setCosts] = useState<MonthlyCost[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const summaryRange = useMemo(() => getQuickRange('thisMonth'), []);
 
   // 加载当前店铺数据
   useEffect(() => {
     if (!currentShop) return;
-    const range = getQuickRange('thisMonth');
+    const range = summaryRange;
     Promise.all([
       fetchProducts(currentShop.id),
       fetchDailyMetrics(currentShop.id, null, range.start, range.end),
@@ -42,10 +43,10 @@ export default function AIView({ currentShop, shops }: Props) {
       setPromotions(pr);
       setCosts(c);
     }).catch(() => {});
-  }, [currentShop]);
+  }, [currentShop, summaryRange.start, summaryRange.end]);
 
   const shopCostRate = currentShop?.defaultCostRate || 0;
-  const summary: MetricsSummary = useMemo(() => calculateMetrics(metrics, promotions, costs, [], shopCostRate), [metrics, promotions, costs, shopCostRate]);
+  const summary: MetricsSummary = useMemo(() => calculateMetrics(metrics, promotions, costs, [], shopCostRate, summaryRange), [metrics, promotions, costs, shopCostRate, summaryRange.start, summaryRange.end]);
 
   const quickQuestions = [
     '本月销售额是多少？',

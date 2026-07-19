@@ -79,7 +79,7 @@ export function calculateMetrics(
   const profitRate = netSales > 0 ? (profit / netSales) * 100 : 0;
   const prePromoProfit = totalSales - totalCost;
   const prePromoProfitRate = totalSales > 0 ? (prePromoProfit / totalSales) * 100 : 0;
-  const breakEvenROI = prePromoProfit > 0 && refundRate < 100 ? totalSales / (prePromoProfit * (1 - refundRate / 100)) : null;
+  const breakEvenROI = calculateBreakEvenROI(prePromoProfitRate, refundRate);
 
   return {
     totalSales,
@@ -305,6 +305,12 @@ export function getNaturalYearRange(date: Date = new Date()): { start: string; e
     start: `${year}-01-01`,
     end: `${year}-12-31`,
   };
+}
+
+/** Break-even gross-sales ROAS. Inputs are percentage points. */
+export function calculateBreakEvenROI(prePromoProfitRate: number, refundRate: number): number | null {
+  if (prePromoProfitRate <= 0 || refundRate >= 100) return null;
+  return 1 / (prePromoProfitRate / 100) / (1 - refundRate / 100);
 }
 
 /** Format a Date in the user's local business timezone, not UTC. */

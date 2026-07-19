@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { calculateMetrics, formatLocalDate, getQuickRange } from './calc';
+import { calculateBreakEvenROI, calculateMetrics, formatLocalDate, getQuickRange } from './calc';
 
 describe('date ranges', () => {
   it('formats local calendar dates without UTC rollover', () => {
@@ -15,6 +15,10 @@ describe('date ranges', () => {
 });
 
 describe('metrics', () => {
+  it('calculates gross-sales break-even ROI from pre-refund margin and refund rate', () => {
+    expect(calculateBreakEvenROI(35, 53.35)).toBeCloseTo(6.125, 2);
+  });
+
   it('uses promotion details when no daily metrics exist', () => {
     const result = calculateMetrics([], [{
       id: 'promo-1', userId: 'u', shopId: 's', productId: null, date: '2026-07-18',

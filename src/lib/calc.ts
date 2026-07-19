@@ -77,6 +77,9 @@ export function calculateMetrics(
   // 利润 = 净销售额 - 总成本 - 推广费
   const profit = netSales - totalCost - promoTotal;
   const profitRate = netSales > 0 ? (profit / netSales) * 100 : 0;
+  const prePromoProfit = netSales - totalCost;
+  const prePromoProfitRate = netSales > 0 ? (prePromoProfit / netSales) * 100 : 0;
+  const breakEvenROI = prePromoProfit > 0 ? netSales / prePromoProfit : null;
 
   return {
     totalSales,
@@ -99,6 +102,8 @@ export function calculateMetrics(
     otherCosts,
     profit,
     profitRate,
+    prePromoProfitRate,
+    breakEvenROI,
     totalOrders,
     totalVisitors,
   };
@@ -121,6 +126,7 @@ export interface DailyMetricWithCalc {
   refundRate: number;
   promoRate: number;
   dailyROI: number;
+  breakEvenROI: number | null;
   cumSales: number;
   cumRefund: number;
   cumRefundRate: number; // 累积退款率 = 累积退款 / 累积销售 * 100%
@@ -160,6 +166,7 @@ export function calculateDailyRows(
     const refundRate = sales > 0 ? (refund / sales) * 100 : 0;
     const promoRate = sales > 0 ? (promo / sales) * 100 : 0;
     const dailyROI = promo > 0 ? sales / promo : 0;
+    const breakEvenROI = netSales > 0 ? 1 : null;
     const cumRefundRate = cumSales > 0 ? (cumRefund / cumSales) * 100 : 0;
     const cumPromoRate = cumSales > 0 ? (cumPromoCost / cumSales) * 100 : 0;
     const cumNetPromoRate = cumNetSales > 0 ? (cumPromoCost / cumNetSales) * 100 : 0;
@@ -178,6 +185,7 @@ export function calculateDailyRows(
       refundRate,
       promoRate,
       dailyROI,
+      breakEvenROI,
       cumSales,
       cumRefund,
       cumRefundRate,

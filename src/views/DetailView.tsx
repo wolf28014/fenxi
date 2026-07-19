@@ -444,6 +444,7 @@ function DailySalesTable({ rows, shopNameMap, showShop, onEdit, onDelete, onBatc
     { key: 'refundRate', label: '退款率', type: 'percent', group: '当期指标' },
     { key: 'promoRate', label: '推广占比', type: 'percent', group: '当期指标' },
     { key: 'dailyROI', label: '投产比', type: 'ratio', group: '当期指标' },
+    { key: 'breakEvenROI', label: '保本投产比', type: 'ratio', group: '当期指标' },
     { key: 'cumSales', label: '累积销售', type: 'currency', group: '累计指标' },
     { key: 'cumRefund', label: '累积退款', type: 'currency', group: '累计指标' },
     { key: 'cumRefundRate', label: '累积退款率', type: 'percent', group: '累计指标' },
@@ -503,7 +504,7 @@ function DailySalesTable({ rows, shopNameMap, showShop, onEdit, onDelete, onBatc
   const summaryPromoRate = summary.salesAmount > 0 ? (summary.promotionCost / summary.salesAmount) * 100 : 0;
   const summaryROI = summary.promotionCost > 0 ? summary.salesAmount / summary.promotionCost : 0;
   const summaryNetROI = last.cumPromoCost > 0 ? last.cumNetSales / last.cumPromoCost : 0;
-  const summaryValues: Record<string, number> = {
+  const summaryValues: Record<string, number | string | null> = {
     salesAmount: summary.salesAmount,
     orderCount: summary.orderCount,
     refundAmount: summary.refundAmount,
@@ -513,6 +514,7 @@ function DailySalesTable({ rows, shopNameMap, showShop, onEdit, onDelete, onBatc
     refundRate: summaryRefundRate,
     promoRate: summaryPromoRate,
     dailyROI: summaryROI,
+    breakEvenROI: summary.netSales > 0 ? 1 : null,
     cumSales: last.cumSales,
     cumRefund: last.cumRefund,
     cumRefundRate: last.cumRefundRate,
@@ -641,6 +643,7 @@ function MonthlySalesTable({ rows, onEdit, onDelete }: { rows: any[]; onEdit: (i
     { key: 'refundRate', label: '退款率', type: 'percent', group: '当月指标' },
     { key: 'promoRate', label: '推广占比', type: 'percent', group: '当月指标' },
     { key: 'monthlyROI', label: '月投产比', type: 'ratio', group: '当月指标' },
+    { key: 'breakEvenROI', label: '保本投产比', type: 'ratio', group: '当月指标' },
     { key: 'cumSales', label: '累积销售', type: 'currency', group: '累计指标' },
     { key: 'cumRefund', label: '累积退款', type: 'currency', group: '累计指标' },
     { key: 'cumRefundRate', label: '累积退款率', type: 'percent', group: '累计指标' },
@@ -674,7 +677,7 @@ function MonthlySalesTable({ rows, onEdit, onDelete }: { rows: any[]; onEdit: (i
   const summaryROI = summary.promotionCost > 0 ? summary.salesAmount / summary.promotionCost : 0;
   const summaryNetROI = last.cumPromoCost > 0 ? last.cumNetSales / last.cumPromoCost : 0;
 
-  const summaryValues: Record<string, number> = {
+  const summaryValues: Record<string, number | string | null> = {
     salesAmount: summary.salesAmount,
     orderCount: summary.orderCount,
     refundAmount: summary.refundAmount,
@@ -684,6 +687,7 @@ function MonthlySalesTable({ rows, onEdit, onDelete }: { rows: any[]; onEdit: (i
     refundRate: summaryRefundRate,
     promoRate: summaryPromoRate,
     monthlyROI: summaryROI,
+    breakEvenROI: summary.netSales > 0 ? 1 : null,
     cumSales: last.cumSales,
     cumRefund: last.cumRefund,
     cumRefundRate: last.cumRefundRate,

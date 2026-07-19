@@ -168,6 +168,8 @@ export interface MetricsSummary {
   otherCosts: number;        // 其他成本（不含货品成本）
   profit: number;            // 利润
   profitRate: number;        // 利润率
+  prePromoProfitRate: number; // 推广前利润率
+  breakEvenROI: number | null; // 保本投产比
   totalOrders: number;       // 累积订单量
   totalVisitors: number;     // 累积访客数
 }

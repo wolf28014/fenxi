@@ -352,6 +352,8 @@ function OverviewTab({ summary, metrics, costs, lastMonthMetrics, shopCostRate }
     { label: '累积净投产比', value: formatRatio(summary.cumNetROI), sub: '累积净销售额 / 累积推广费', color: 'text-blue-600' },
     { label: '利润', value: formatCurrency(summary.profit), sub: '净销售额 - 总成本 - 推广费', color: summary.profit >= 0 ? 'text-emerald-600' : 'text-red-500', pulse: summary.profit < 0 },
     { label: '利润率', value: formatPercent(summary.profitRate), sub: '利润 / 净销售额', color: summary.profitRate >= 0 ? 'text-emerald-600' : 'text-red-500', pulse: summary.profitRate < 0 },
+    { label: '推广前利润率', value: formatPercent(summary.prePromoProfitRate), sub: '净销售额 - 非推广成本', color: summary.prePromoProfitRate >= 0 ? 'text-emerald-600' : 'text-red-500' },
+    { label: '保本投产比', value: summary.breakEvenROI === null ? '无法保本' : formatRatio(summary.breakEvenROI), sub: '净销售额 / 保本推广费用', color: 'text-blue-600' },
     { label: '转化率', value: summary.totalVisitors > 0 ? formatPercent((summary.totalOrders / summary.totalVisitors) * 100) : '0%', sub: '订单量 / 访客数', color: 'text-purple-600' },
     // ===== 新增 10 个高价值衍生指标 =====
     { label: '客单价', value: formatCurrency(ext.avgOrderValue), sub: '销售额 / 订单量', color: 'text-blue-600' },

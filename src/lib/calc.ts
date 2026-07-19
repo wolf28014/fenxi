@@ -77,9 +77,9 @@ export function calculateMetrics(
   // 利润 = 净销售额 - 总成本 - 推广费
   const profit = netSales - totalCost - promoTotal;
   const profitRate = netSales > 0 ? (profit / netSales) * 100 : 0;
-  const prePromoProfit = netSales - totalCost;
-  const prePromoProfitRate = netSales > 0 ? (prePromoProfit / netSales) * 100 : 0;
-  const breakEvenROI = prePromoProfit > 0 ? netSales / prePromoProfit : null;
+  const prePromoProfit = totalSales - totalCost;
+  const prePromoProfitRate = totalSales > 0 ? (prePromoProfit / totalSales) * 100 : 0;
+  const breakEvenROI = prePromoProfit > 0 && refundRate < 100 ? totalSales / (prePromoProfit * (1 - refundRate / 100)) : null;
 
   return {
     totalSales,
@@ -167,7 +167,9 @@ export function calculateDailyRows(
     const refundRate = sales > 0 ? (refund / sales) * 100 : 0;
     const promoRate = sales > 0 ? (promo / sales) * 100 : 0;
     const dailyROI = promo > 0 ? sales / promo : 0;
-    const breakEvenROI = netSales > 0 && shopCostRate > 0 && shopCostRate < 100 ? 1 / (1 - shopCostRate / 100) : null;
+    const breakEvenROI = sales > 0 && shopCostRate > 0 && shopCostRate < 100 && refundRate < 100
+      ? 1 / (1 - shopCostRate / 100) / (1 - refundRate / 100)
+      : null;
     const cumRefundRate = cumSales > 0 ? (cumRefund / cumSales) * 100 : 0;
     const cumPromoRate = cumSales > 0 ? (cumPromoCost / cumSales) * 100 : 0;
     const cumNetPromoRate = cumNetSales > 0 ? (cumPromoCost / cumNetSales) * 100 : 0;
@@ -258,7 +260,9 @@ export function calculateMonthlyRows(metrics: DailyMetric[], shopCostRate = 0): 
     const refundRate = sales > 0 ? (refund / sales) * 100 : 0;
     const promoRate = sales > 0 ? (promo / sales) * 100 : 0;
     const monthlyROI = promo > 0 ? sales / promo : 0;
-    const breakEvenROI = netSales > 0 && shopCostRate > 0 && shopCostRate < 100 ? 1 / (1 - shopCostRate / 100) : null;
+    const breakEvenROI = sales > 0 && shopCostRate > 0 && shopCostRate < 100 && refundRate < 100
+      ? 1 / (1 - shopCostRate / 100) / (1 - refundRate / 100)
+      : null;
     const cumRefundRate = cumSales > 0 ? (cumRefund / cumSales) * 100 : 0;
     const cumPromoRate = cumSales > 0 ? (cumPromoCost / cumSales) * 100 : 0;
     const cumNetPromoRate = cumNetSales > 0 ? (cumPromoCost / cumNetSales) * 100 : 0;

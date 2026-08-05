@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.DS_Store
+*.log
+.env
+.env.local
+.env.*.local
+.vscode/
+.idea/
+android/
+!android/.gitkeep
+*.apk
+*.keystore
+release/
+coverage/
